@@ -15,33 +15,33 @@ type Model interface {
 
 // Agent is the core struct that manages conversation and interacts with a model.
 type Agent struct {
-	model    Model     // The AI model to use (e.g., OpenAI)
-	messages []Message // Conversation history
+	Model         Model     // The AI model to use (e.g., OpenAI)
+	Messages      []Message // Conversation history
+	SystemMessage string    // The initial system message
 }
 
-// NewAgent creates a new Agent instance with an optional system message.
-// The system message sets the agent’s initial behavior.
-func NewAgent(model Model, systemMessage string) *Agent {
-	agent := &Agent{
-		model:    model,
-		messages: []Message{},
+func (a *Agent) Init() {
+	if a.Model == nil {
+		panic("Agent must have a model")
 	}
-	if systemMessage != "" {
-		agent.AddMessage("system", systemMessage)
+	if a.Messages == nil {
+		a.Messages = []Message{}
 	}
-	return agent
+	if a.SystemMessage != "" {
+		a.AddMessage("system", a.SystemMessage)
+	}
 }
 
 // AddMessage appends a new message to the conversation history.
 func (a *Agent) AddMessage(role, content string) {
-	a.messages = append(a.messages, Message{Role: role, Content: content})
+	a.Messages = append(a.Messages, Message{Role: role, Content: content})
 }
 
 // RespondTo processes a user message and returns the agent’s response.
 // It uses the model to generate a response and updates the conversation history.
 func (a *Agent) RespondTo(ctx context.Context, userMessage string) (string, error) {
 	a.AddMessage("user", userMessage)
-	response, err := a.model.ChatCompletion(ctx, a.messages)
+	response, err := a.Model.ChatCompletion(ctx, a.Messages)
 	if err != nil {
 		return "", err
 	}

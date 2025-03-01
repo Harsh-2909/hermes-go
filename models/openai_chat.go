@@ -10,14 +10,19 @@ import (
 
 // OpenAIModel integrates with OpenAI’s Chat API, implementing the Model interface.
 type OpenAIModel struct {
-	client    *openai.Client // OpenAI API client
-	modelName string         // e.g., "gpt-3.5-turbo"
+	client *openai.Client // OpenAI API client
+	Id     string         // The model to use, e.g., "gpt-4o-mini"
+	ApiKey string         // The API key for OpenAI
 }
 
-// NewOpenAIModel initializes an OpenAIModel with an API key and model name.
-func NewOpenAIModel(apiKey, modelName string) *OpenAIModel {
-	client := openai.NewClient(apiKey)
-	return &OpenAIModel{client: client, modelName: modelName}
+func (m *OpenAIModel) Init() {
+	if m.ApiKey == "" {
+		panic("OpenAIModel must have an API key")
+	}
+	if m.Id == "" {
+		panic("OpenAIModel must have a model ID")
+	}
+	m.client = openai.NewClient(m.ApiKey)
 }
 
 // ChatCompletion sends messages to OpenAI’s Chat API and returns the response.
@@ -35,7 +40,7 @@ func (m *OpenAIModel) ChatCompletion(ctx context.Context, messages []agent.Messa
 	resp, err := m.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model:    m.modelName,
+			Model:    m.Id,
 			Messages: openaiMessages,
 		},
 	)

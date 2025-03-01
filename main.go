@@ -21,14 +21,21 @@ func main() {
 
 	// Initialize the OpenAI model
 	apiKey := os.Getenv("OPENAI_API_KEY")
-	model := models.NewOpenAIModel(apiKey, "gpt-4o-mini")
+	model := &models.OpenAIModel{
+		ApiKey: apiKey,
+		Id:     "gpt-4o-mini",
+	}
+	model.Init()
 
-	// Create an agent with a system message
-	ag := agent.NewAgent(model, "You are a helpful assistant.")
+	agent := agent.Agent{
+		Model:         model,
+		SystemMessage: "You are a helpful assistant.",
+	}
+	agent.Init()
 
 	// Send a user message and get a response
 	ctx := context.Background()
-	response, err := ag.RespondTo(ctx, "Hello, how are you?")
+	response, err := agent.RespondTo(ctx, "Hello, how are you?")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
