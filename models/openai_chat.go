@@ -10,9 +10,10 @@ import (
 
 // OpenAIModel integrates with OpenAI’s Chat API, implementing the Model interface.
 type OpenAIModel struct {
-	client *openai.Client // OpenAI API client
-	Id     string         // The model to use, e.g., "gpt-4o-mini"
-	ApiKey string         // The API key for OpenAI
+	client      *openai.Client // OpenAI API client
+	Id          string         // The model to use, e.g., "gpt-4o-mini"
+	ApiKey      string         // The API key for OpenAI
+	Temperature float32        // The temperature for the model
 }
 
 func (m *OpenAIModel) Init() {
@@ -21,6 +22,9 @@ func (m *OpenAIModel) Init() {
 	}
 	if m.Id == "" {
 		panic("OpenAIModel must have a model ID")
+	}
+	if m.Temperature == 0 {
+		m.Temperature = 0.5 // Default temperature
 	}
 	m.client = openai.NewClient(m.ApiKey)
 }
@@ -40,12 +44,13 @@ func (m *OpenAIModel) ChatCompletion(ctx context.Context, messages []agent.Messa
 	resp, err := m.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model:    m.Id,
-			Messages: openaiMessages,
+			Model:       m.Id,
+			Messages:    openaiMessages,
+			Temperature: m.Temperature,
 		},
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get chat completion for model %s: %w", m.Id, err)
 	}
 
 	// Extract the response content
