@@ -21,7 +21,7 @@ func main() {
 
 	// Initialize the OpenAI model
 	apiKey := os.Getenv("OPENAI_API_KEY")
-	model := &models.OpenAIModel{
+	model := &models.OpenAIChat{
 		ApiKey: apiKey,
 		Id:     "gpt-4o-mini",
 	}

@@ -10,6 +10,7 @@ type Message struct {
 
 // Model defines the interface for AI model interactions.
 type Model interface {
+	Init()
 	ChatCompletion(ctx context.Context, messages []Message) (string, error)
 }
 

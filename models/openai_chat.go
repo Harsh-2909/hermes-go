@@ -8,20 +8,20 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-// OpenAIModel integrates with OpenAI’s Chat API, implementing the Model interface.
-type OpenAIModel struct {
+// OpenAIChat integrates with OpenAI’s Chat API, implementing the Model interface.
+type OpenAIChat struct {
 	client      *openai.Client // OpenAI API client
 	Id          string         // The model to use, e.g., "gpt-4o-mini"
 	ApiKey      string         // The API key for OpenAI
 	Temperature float32        // The temperature for the model
 }
 
-func (m *OpenAIModel) Init() {
+func (m *OpenAIChat) Init() {
 	if m.ApiKey == "" {
-		panic("OpenAIModel must have an API key")
+		panic("OpenAIChat must have an API key")
 	}
 	if m.Id == "" {
-		panic("OpenAIModel must have a model ID")
+		panic("OpenAIChat must have a model ID")
 	}
 	if m.Temperature == 0 {
 		m.Temperature = 0.5 // Default temperature
@@ -30,7 +30,7 @@ func (m *OpenAIModel) Init() {
 }
 
 // ChatCompletion sends messages to OpenAI’s Chat API and returns the response.
-func (m *OpenAIModel) ChatCompletion(ctx context.Context, messages []agent.Message) (string, error) {
+func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Message) (string, error) {
 	// Convert our Message type to OpenAI’s expected format
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
