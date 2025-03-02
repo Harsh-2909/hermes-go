@@ -3,26 +3,14 @@ package agent
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/Harsh-2909/hermes-go/models"
 )
-
-// Message represents a single message in the conversation.
-type Message struct {
-	Role    string // e.g., "system", "user", "assistant"
-	Content string // The text content of the message
-}
-
-// Model defines the interface for AI model interactions.
-type Model interface {
-	Init()
-	ChatCompletion(ctx context.Context, messages []Message) (ModelResponse, error)
-	// ChatCompletionStream(ctx context.Context, messages []Message) (chan ModelResponse, error)
-}
 
 // Agent is the core struct that manages conversation and interacts with a model.
 type Agent struct {
-	Model    Model     // The AI model to use (e.g., OpenAI)
-	Messages []Message // Conversation history
+	Model    models.Model     // The AI model to use (e.g., OpenAI)
+	Messages []models.Message // Conversation history
 
 	// System message Settings
 
@@ -32,34 +20,17 @@ type Agent struct {
 	Role          string // The role of the agent in the conversation.
 }
 
-// Usage captures token usage or other metrics from the model.
-type Usage struct {
-	PromptTokens     int // Tokens used in the prompt
-	CompletionTokens int // Tokens used in the completion
-	TotalTokens      int // Total tokens used
-}
-
-// ModelResponse represents a response from the model, used for both streaming and non-streaming cases.
-type ModelResponse struct {
-	Event     string    // Type of event: "chunk", "tool_call", "end", "complete"
-	Data      string    // Response content or chunk for streaming
-	Usage     *Usage    // Usage metrics, nullable for partial responses
-	CreatedAt time.Time // Timestamp of response creation
-	Audio     []byte    // Optional audio data, if applicable
-	Thinking  string    // Optional intermediate reasoning or thoughts
-}
-
 func (agent *Agent) Init() {
 	if agent.Model == nil {
 		panic("Agent must have a model")
 	}
 	if agent.Messages == nil {
-		agent.Messages = []Message{}
+		agent.Messages = []models.Message{}
 	}
 	agent.Messages = append(agent.Messages, agent.getSystemMessage())
 }
 
-func (agent *Agent) getSystemMessage() Message {
+func (agent *Agent) getSystemMessage() models.Message {
 	var systemMessageContent string
 	if agent.SystemMessage != "" {
 		systemMessageContent = agent.SystemMessage
@@ -74,12 +45,12 @@ func (agent *Agent) getSystemMessage() Message {
 			systemMessageContent += fmt.Sprintf("<your_role>\n%s\n</your_role>\n\n", agent.Role)
 		}
 	}
-	return Message{Role: "system", Content: systemMessageContent}
+	return models.Message{Role: "system", Content: systemMessageContent}
 }
 
 // AddMessage appends a new message to the conversation history.
 func (agent *Agent) AddMessage(role, content string) {
-	agent.Messages = append(agent.Messages, Message{Role: role, Content: content})
+	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content})
 }
 
 // RespondTo processes a user message and returns the agent’s response.

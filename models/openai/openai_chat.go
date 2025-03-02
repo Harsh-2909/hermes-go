@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Harsh-2909/hermes-go/agent"
+	"github.com/Harsh-2909/hermes-go/models"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -18,21 +18,21 @@ type OpenAIChat struct {
 }
 
 // Init initializes the OpenAIChat model. It sets all the defaults and validates the configuration.
-func (m *OpenAIChat) Init() {
-	if m.ApiKey == "" {
+func (model *OpenAIChat) Init() {
+	if model.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
 	}
-	if m.Id == "" {
+	if model.Id == "" {
 		panic("OpenAIChat must have a model ID")
 	}
-	if m.Temperature == 0 {
-		m.Temperature = 0.5 // Default temperature
+	if model.Temperature == 0 {
+		model.Temperature = 0.5 // Default temperature
 	}
-	m.client = openai.NewClient(m.ApiKey)
+	model.client = openai.NewClient(model.ApiKey)
 }
 
 // ChatCompletion sends messages to OpenAI’s Chat API and returns the response.
-func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Message) (agent.ModelResponse, error) {
+func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	// Convert our Message type to OpenAI’s expected format
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
@@ -43,29 +43,29 @@ func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Messag
 	}
 
 	// Make the API call
-	resp, err := m.client.CreateChatCompletion(
+	resp, err := model.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model:       m.Id,
+			Model:       model.Id,
 			Messages:    openaiMessages,
-			Temperature: m.Temperature,
+			Temperature: model.Temperature,
 		},
 	)
 	if err != nil {
-		return agent.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", m.Id, err)
+		return models.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", model.Id, err)
 	}
 
 	// Extract the response content
 	if len(resp.Choices) == 0 {
-		return agent.ModelResponse{}, fmt.Errorf("no response from model")
+		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
-	modelResp := agent.ModelResponse{
+	modelResp := models.ModelResponse{
 		Event:     "complete",
 		Data:      resp.Choices[0].Message.Content,
 		Usage:     nil,
 		CreatedAt: time.Now(),
 	}
-	modelResp.Usage = &agent.Usage{
+	modelResp.Usage = &models.Usage{
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		TotalTokens:      resp.Usage.TotalTokens,

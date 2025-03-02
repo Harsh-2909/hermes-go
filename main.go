@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/Harsh-2909/hermes-go/agent"
-	"github.com/Harsh-2909/hermes-go/models"
+	models "github.com/Harsh-2909/hermes-go/models/openai"
 
 	"github.com/joho/godotenv"
 )
@@ -20,14 +20,13 @@ func main() {
 	}
 
 	// Initialize the OpenAI model
-	apiKey := os.Getenv("OPENAI_API_KEY")
 	model := &models.OpenAIChat{
-		ApiKey: apiKey,
+		ApiKey: os.Getenv("OPENAI_API_KEY"),
 		Id:     "gpt-4o-mini",
 	}
 	model.Init()
 
-	agent := agent.Agent{
+	agent := &agent.Agent{
 		Model:         model,
 		SystemMessage: "You are a helpful assistant.",
 	}
