@@ -9,7 +9,7 @@ import (
 type Model interface {
 	Init()
 	ChatCompletion(ctx context.Context, messages []Message) (ModelResponse, error)
-	// ChatCompletionStream(ctx context.Context, messages []agent.Message) (chan ModelResponse, error)
+	ChatCompletionStream(ctx context.Context, messages []Message) (chan ModelResponse, error)
 }
 
 // Usage captures token usage or other metrics from the model.

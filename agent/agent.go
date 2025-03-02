@@ -53,19 +53,50 @@ func (agent *Agent) AddMessage(role, content string) {
 	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content})
 }
 
-// RespondTo processes a user message and returns the agent’s response.
+// Run processes a user message and returns the agent’s response.
 // It uses the model to generate a response and updates the conversation history.
-func (agent *Agent) RespondTo(ctx context.Context, userMessage string) (string, error) {
+func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelResponse, error) {
 	agent.AddMessage("user", userMessage)
 
 	if len(agent.Messages) == 0 {
-		return "", fmt.Errorf("no messages available for chat completion")
+		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
 	}
 
 	response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
 	if err != nil {
-		return "", err
+		return models.ModelResponse{}, err
 	}
 	agent.AddMessage("assistant", response.Data)
-	return response.Data, nil
+	return response, nil
+}
+
+// RunStream processes a user message and returns a channel of responses.
+// It uses the model to generate a response and updates the conversation history.
+func (agent *Agent) RunStream(ctx context.Context, userMessage string) (chan models.ModelResponse, error) {
+	agent.AddMessage("user", userMessage)
+
+	if len(agent.Messages) == 0 {
+		return nil, fmt.Errorf("no messages available for chat completion")
+	}
+
+	ch, err := agent.Model.ChatCompletionStream(ctx, agent.Messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// Accumulate response in the background for history.
+	// FIXME: This implementation does not work properly as it is consuming the channel before the caller of `RunStream` can consume it.
+	// fullResponse := ""
+	// go func() {
+	// 	for resp := range ch {
+	// 		if resp.Event == "chunk" {
+	// 			fullResponse += resp.Data
+	// 		}
+	// 		// Add handling for other events (e.g., tool calls) as needed
+	// 	}
+	// 	agent.AddMessage("assistant", fullResponse)
+	// 	fmt.Println("DEBUGGING. Full response:", fullResponse)
+	// }()
+
+	return ch, nil
 }

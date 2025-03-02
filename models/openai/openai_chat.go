@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
@@ -71,4 +72,66 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		TotalTokens:      resp.Usage.TotalTokens,
 	}
 	return modelResp, nil
+}
+
+func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
+	// Convert agent messages to OpenAI format
+	var openaiMessages []openai.ChatCompletionMessage
+	for _, msg := range messages {
+		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	// Create the stream
+	stream, err := model.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+		Model:       model.Id,
+		Messages:    openaiMessages,
+		Temperature: model.Temperature,
+		Stream:      true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stream: %w", err)
+	}
+
+	// Create channel for ModelResponse
+	ch := make(chan models.ModelResponse)
+
+	// Process stream in a goroutine
+	go func() {
+		defer close(ch) // Close channel when done
+		for {
+			resp, err := stream.Recv()
+			// When the stream ends, we get an EOF error
+			if err == io.EOF {
+				ch <- models.ModelResponse{
+					Event:     "end",
+					CreatedAt: time.Now(),
+				}
+				return
+			}
+			if err != nil {
+				ch <- models.ModelResponse{
+					Event:     "error",
+					Data:      err.Error(),
+					CreatedAt: time.Now(),
+				}
+				return
+			}
+			if len(resp.Choices) > 0 {
+				delta := resp.Choices[0].Delta
+				if delta.Content != "" {
+					// Emit content chunk
+					ch <- models.ModelResponse{
+						Event:     "chunk",
+						Data:      delta.Content,
+						CreatedAt: time.Now(),
+					}
+				}
+			}
+		}
+	}()
+
+	return ch, nil
 }
