@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Harsh-2909/hermes-go/agent"
 	"github.com/sashabaranov/go-openai"
@@ -16,6 +17,7 @@ type OpenAIChat struct {
 	Temperature float32        // The temperature for the model
 }
 
+// Init initializes the OpenAIChat model. It sets all the defaults and validates the configuration.
 func (m *OpenAIChat) Init() {
 	if m.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
@@ -30,7 +32,7 @@ func (m *OpenAIChat) Init() {
 }
 
 // ChatCompletion sends messages to OpenAI’s Chat API and returns the response.
-func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Message) (string, error) {
+func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Message) (agent.ModelResponse, error) {
 	// Convert our Message type to OpenAI’s expected format
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
@@ -50,12 +52,23 @@ func (m *OpenAIChat) ChatCompletion(ctx context.Context, messages []agent.Messag
 		},
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to get chat completion for model %s: %w", m.Id, err)
+		return agent.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", m.Id, err)
 	}
 
 	// Extract the response content
-	if len(resp.Choices) > 0 {
-		return resp.Choices[0].Message.Content, nil
+	if len(resp.Choices) == 0 {
+		return agent.ModelResponse{}, fmt.Errorf("no response from model")
 	}
-	return "", fmt.Errorf("no response from model")
+	modelResp := agent.ModelResponse{
+		Event:     "complete",
+		Data:      resp.Choices[0].Message.Content,
+		Usage:     nil,
+		CreatedAt: time.Now(),
+	}
+	modelResp.Usage = &agent.Usage{
+		PromptTokens:     resp.Usage.PromptTokens,
+		CompletionTokens: resp.Usage.CompletionTokens,
+		TotalTokens:      resp.Usage.TotalTokens,
+	}
+	return modelResp, nil
 }

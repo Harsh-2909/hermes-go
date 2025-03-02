@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // Message represents a single message in the conversation.
@@ -14,7 +15,8 @@ type Message struct {
 // Model defines the interface for AI model interactions.
 type Model interface {
 	Init()
-	ChatCompletion(ctx context.Context, messages []Message) (string, error)
+	ChatCompletion(ctx context.Context, messages []Message) (ModelResponse, error)
+	// ChatCompletionStream(ctx context.Context, messages []Message) (chan ModelResponse, error)
 }
 
 // Agent is the core struct that manages conversation and interacts with a model.
@@ -30,52 +32,69 @@ type Agent struct {
 	Role          string // The role of the agent in the conversation.
 }
 
-func (a *Agent) Init() {
-	if a.Model == nil {
-		panic("Agent must have a model")
-	}
-	if a.Messages == nil {
-		a.Messages = []Message{}
-	}
-	a.Messages = append(a.Messages, a.getSystemMessage())
+// Usage captures token usage or other metrics from the model.
+type Usage struct {
+	PromptTokens     int // Tokens used in the prompt
+	CompletionTokens int // Tokens used in the completion
+	TotalTokens      int // Total tokens used
 }
 
-func (a *Agent) getSystemMessage() Message {
+// ModelResponse represents a response from the model, used for both streaming and non-streaming cases.
+type ModelResponse struct {
+	Event     string    // Type of event: "chunk", "tool_call", "end", "complete"
+	Data      string    // Response content or chunk for streaming
+	Usage     *Usage    // Usage metrics, nullable for partial responses
+	CreatedAt time.Time // Timestamp of response creation
+	Audio     []byte    // Optional audio data, if applicable
+	Thinking  string    // Optional intermediate reasoning or thoughts
+}
+
+func (agent *Agent) Init() {
+	if agent.Model == nil {
+		panic("Agent must have a model")
+	}
+	if agent.Messages == nil {
+		agent.Messages = []Message{}
+	}
+	agent.Messages = append(agent.Messages, agent.getSystemMessage())
+}
+
+func (agent *Agent) getSystemMessage() Message {
 	var systemMessageContent string
-	if a.SystemMessage != "" {
-		systemMessageContent = a.SystemMessage
+	if agent.SystemMessage != "" {
+		systemMessageContent = agent.SystemMessage
 	} else {
-		if a.Description != "" {
-			systemMessageContent += a.Description + "\n\n"
+		if agent.Description != "" {
+			systemMessageContent += agent.Description + "\n\n"
 		}
-		if a.Goal != "" {
-			systemMessageContent += fmt.Sprintf("<your_goal>\n%s\n</your_goal>\n\n", a.Goal)
+		if agent.Goal != "" {
+			systemMessageContent += fmt.Sprintf("<your_goal>\n%s\n</your_goal>\n\n", agent.Goal)
 		}
-		if a.Role != "" {
-			systemMessageContent += fmt.Sprintf("<your_role>\n%s\n</your_role>\n\n", a.Role)
+		if agent.Role != "" {
+			systemMessageContent += fmt.Sprintf("<your_role>\n%s\n</your_role>\n\n", agent.Role)
 		}
 	}
 	return Message{Role: "system", Content: systemMessageContent}
 }
 
 // AddMessage appends a new message to the conversation history.
-func (a *Agent) AddMessage(role, content string) {
-	a.Messages = append(a.Messages, Message{Role: role, Content: content})
+func (agent *Agent) AddMessage(role, content string) {
+	agent.Messages = append(agent.Messages, Message{Role: role, Content: content})
 }
 
 // RespondTo processes a user message and returns the agent’s response.
 // It uses the model to generate a response and updates the conversation history.
-func (a *Agent) RespondTo(ctx context.Context, userMessage string) (string, error) {
-	a.AddMessage("user", userMessage)
+func (agent *Agent) RespondTo(ctx context.Context, userMessage string) (string, error) {
+	agent.AddMessage("user", userMessage)
 
-	if len(a.Messages) == 0 {
+	if len(agent.Messages) == 0 {
 		return "", fmt.Errorf("no messages available for chat completion")
 	}
 
-	response, err := a.Model.ChatCompletion(ctx, a.Messages)
+	response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
 	if err != nil {
 		return "", err
 	}
-	a.AddMessage("assistant", response)
-	return response, nil
+	agent.AddMessage("assistant", response.Data)
+	return response.Data, nil
 }
