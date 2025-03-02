@@ -31,7 +31,12 @@ func (agent *Agent) Init() {
 	if agent.Messages == nil {
 		agent.Messages = []models.Message{}
 	}
-	agent.Messages = append(agent.Messages, agent.getSystemMessage())
+	if len(agent.Messages) == 0 {
+		systemMessage := agent.getSystemMessage()
+		if systemMessage.Content != "" {
+			agent.Messages = append(agent.Messages, systemMessage)
+		}
+	}
 }
 
 // getSystemMessage constructs the initial system message based on the agent's settings.
