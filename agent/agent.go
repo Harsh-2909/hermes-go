@@ -12,12 +12,13 @@ type Agent struct {
 	Model    models.Model     // The AI model to use (e.g., OpenAI)
 	Messages []models.Message // Conversation history
 
-	// System message Settings
+	// --- Settings for building the default system message ---
 
 	SystemMessage string // The initial system message
 	Description   string // A description of the Agent that is added to the start of the system message.
 	Goal          string // The goal of this task.
 	Role          string // The role of the agent in the conversation.
+	Markdown      bool   // If markdown=true, add instructions to format the output using markdown
 }
 
 func (agent *Agent) Init() {
@@ -44,6 +45,17 @@ func (agent *Agent) getSystemMessage() models.Message {
 		if agent.Role != "" {
 			systemMessageContent += fmt.Sprintf("<your_role>\n%s\n</your_role>\n\n", agent.Role)
 		}
+	}
+	var additionalInformation []string
+	if agent.Markdown {
+		additionalInformation = append(additionalInformation, "Use markdown to format your answers.")
+	}
+	if len(additionalInformation) > 0 {
+		systemMessageContent += "<additional_information>"
+		for _, instruction := range additionalInformation {
+			systemMessageContent += fmt.Sprintf("\n- %s", instruction)
+		}
+		systemMessageContent += "\n</additional_information>\n\n"
 	}
 	return models.Message{Role: "system", Content: systemMessageContent}
 }
