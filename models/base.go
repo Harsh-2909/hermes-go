@@ -1,3 +1,4 @@
+// Package models defines shared types and interfaces for AI model interactions.
 package models
 
 import (
@@ -5,26 +6,28 @@ import (
 	"time"
 )
 
-// Model defines the interface for AI model interactions.
+// Model defines the interface for interacting with AI models.
+// Implementations must support initialization and both synchronous and streaming chat completions.
 type Model interface {
-	Init()
-	ChatCompletion(ctx context.Context, messages []Message) (ModelResponse, error)
-	ChatCompletionStream(ctx context.Context, messages []Message) (chan ModelResponse, error)
+	Init()                                                                                    // Initialize the model with defaults and validate configuration
+	ChatCompletion(ctx context.Context, messages []Message) (ModelResponse, error)            // Perform a synchronous chat completion
+	ChatCompletionStream(ctx context.Context, messages []Message) (chan ModelResponse, error) // Stream chat responses
 }
 
-// Usage captures token usage or other metrics from the model.
+// Usage captures token usage metrics returned by the model.
 type Usage struct {
-	PromptTokens     int // Tokens used in the prompt
-	CompletionTokens int // Tokens used in the completion
-	TotalTokens      int // Total tokens used
+	PromptTokens     int // Number of tokens in the input prompt
+	CompletionTokens int // Number of tokens in the generated completion
+	TotalTokens      int // Total tokens used (prompt + completion)
 }
 
-// ModelResponse represents a response from the model, used for both streaming and non-streaming cases.
+// ModelResponse represents a response from an AI model.
+// It is used for both synchronous responses (Event="complete") and streaming chunks (e.g., Event="chunk", "end").
 type ModelResponse struct {
-	Event     string    // Type of event: "chunk", "tool_call", "end", "complete"
-	Data      string    // Response content or chunk for streaming
-	Usage     *Usage    // Usage metrics, nullable for partial responses
-	CreatedAt time.Time // Timestamp of response creation
-	Audio     []byte    // Optional audio data, if applicable
-	Thinking  string    // Optional intermediate reasoning or thoughts
+	Event     string    // Event type: "chunk" (partial data), "complete" (full response), "end" (stream end), etc.
+	Data      string    // Response content or chunk data
+	Usage     *Usage    // Token usage metrics, typically set for "complete" or "end" events; nullable
+	CreatedAt time.Time // Timestamp when the response was generated
+	Audio     []byte    // Optional audio data, if supported by the model
+	Thinking  string    // Optional intermediate reasoning or thoughts, if provided
 }

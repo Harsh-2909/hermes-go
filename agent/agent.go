@@ -1,3 +1,4 @@
+// Package agent provides the core functionality for managing AI agent conversations.
 package agent
 
 import (
@@ -7,20 +8,22 @@ import (
 	"github.com/Harsh-2909/hermes-go/models"
 )
 
-// Agent is the core struct that manages conversation and interacts with a model.
+// Agent manages a conversation with an AI model, maintaining history and settings for the system message.
+// It interacts with a provided Model to process user inputs and generate responses.
 type Agent struct {
-	Model    models.Model     // The AI model to use (e.g., OpenAI)
-	Messages []models.Message // Conversation history
+	Model    models.Model     // The AI model used for generating responses (e.g., OpenAIChat)
+	Messages []models.Message // History of system, user, and assistant messages in the conversation
 
-	// --- Settings for building the default system message ---
-
-	SystemMessage string // The initial system message
-	Description   string // A description of the Agent that is added to the start of the system message.
-	Goal          string // The goal of this task.
-	Role          string // The role of the agent in the conversation.
-	Markdown      bool   // If markdown=true, add instructions to format the output using markdown
+	// Settings for building the default system message
+	SystemMessage string // Custom system message; if set, overrides other settings
+	Description   string // Description of the agent, prepended to the default system message
+	Goal          string // Task goal, included in the system message within <your_goal> tags
+	Role          string // Agent's role, included in the system message within <your_role> tags
+	Markdown      bool   // If true, instructs the model to format responses in Markdown
 }
 
+// Init initializes the Agent with required settings and the system message.
+// It panics if no Model is provided and ensures Messages is initialized before appending the system message.
 func (agent *Agent) Init() {
 	if agent.Model == nil {
 		panic("Agent must have a model")
@@ -31,6 +34,9 @@ func (agent *Agent) Init() {
 	agent.Messages = append(agent.Messages, agent.getSystemMessage())
 }
 
+// getSystemMessage constructs the initial system message based on the agent's settings.
+// It uses SystemMessage if provided; otherwise, it builds a message from Description, Goal, Role,
+// and adds Markdown instructions if enabled.
 func (agent *Agent) getSystemMessage() models.Message {
 	var systemMessageContent string
 	if agent.SystemMessage != "" {
@@ -60,13 +66,14 @@ func (agent *Agent) getSystemMessage() models.Message {
 	return models.Message{Role: "system", Content: systemMessageContent}
 }
 
-// AddMessage appends a new message to the conversation history.
+// AddMessage appends a new message with the specified role and content to the conversation history.
 func (agent *Agent) AddMessage(role, content string) {
 	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content})
 }
 
-// Run processes a user message and returns the agent’s response.
-// It uses the model to generate a response and updates the conversation history.
+// Run processes a user message synchronously and returns the model's response.
+// It adds the user message to the history, invokes ChatCompletion on the Model, appends the assistant’s response,
+// and returns the result. Returns an error if the model fails or no messages exist.
 func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelResponse, error) {
 	agent.AddMessage("user", userMessage)
 
@@ -82,8 +89,10 @@ func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelRe
 	return response, nil
 }
 
-// RunStream processes a user message and returns a channel of responses.
-// It uses the model to generate a response and updates the conversation history.
+// RunStream processes a user message and returns a channel for streaming model responses.
+// It adds the user message to the history and invokes ChatCompletionStream on the Model.
+// The caller must consume the channel to receive response chunks; the history is not updated here
+// due to the streaming nature (see implementation note).
 func (agent *Agent) RunStream(ctx context.Context, userMessage string) (chan models.ModelResponse, error) {
 	agent.AddMessage("user", userMessage)
 

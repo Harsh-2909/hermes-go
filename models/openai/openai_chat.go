@@ -1,3 +1,4 @@
+// Package models provides implementations of the Model interface, including OpenAI integration.
 package models
 
 import (
@@ -10,15 +11,16 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-// OpenAIChat integrates with OpenAI’s Chat API, implementing the Model interface.
+// OpenAIChat implements the Model interface for OpenAI's Chat API.
 type OpenAIChat struct {
-	client      *openai.Client // OpenAI API client
-	Id          string         // The model to use, e.g., "gpt-4o-mini"
-	ApiKey      string         // The API key for OpenAI
-	Temperature float32        // The temperature for the model
+	client      *openai.Client // Internal OpenAI API client
+	Id          string         // Model identifier (e.g., "gpt-4o-mini")
+	ApiKey      string         // OpenAI API key for authentication
+	Temperature float32        // Controls response randomness; higher values increase creativity
 }
 
-// Init initializes the OpenAIChat model. It sets all the defaults and validates the configuration.
+// Init initializes the OpenAIChat instance with defaults and validates required fields.
+// It panics if ApiKey or Id is missing and sets Temperature to 0.5 if unspecified.
 func (model *OpenAIChat) Init() {
 	if model.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
@@ -32,9 +34,9 @@ func (model *OpenAIChat) Init() {
 	model.client = openai.NewClient(model.ApiKey)
 }
 
-// ChatCompletion sends messages to OpenAI’s Chat API and returns the response.
+// ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
+// It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
 func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
-	// Convert our Message type to OpenAI’s expected format
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
 		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
@@ -43,7 +45,6 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		})
 	}
 
-	// Make the API call
 	resp, err := model.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -56,7 +57,6 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		return models.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", model.Id, err)
 	}
 
-	// Extract the response content
 	if len(resp.Choices) == 0 {
 		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
@@ -74,8 +74,10 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 	return modelResp, nil
 }
 
+// ChatCompletionStream initiates a streaming chat request to OpenAI and returns a channel of responses.
+// It emits ModelResponse events ("chunk" for content, "end" for completion, "error" for failures).
+// The caller must consume the channel to process the stream.
 func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
-	// Convert agent messages to OpenAI format
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
 		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
@@ -84,7 +86,6 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 		})
 	}
 
-	// Create the stream
 	stream, err := model.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:       model.Id,
 		Messages:    openaiMessages,
@@ -95,15 +96,12 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 		return nil, fmt.Errorf("failed to create stream: %w", err)
 	}
 
-	// Create channel for ModelResponse
 	ch := make(chan models.ModelResponse)
-
-	// Process stream in a goroutine
 	go func() {
-		defer close(ch) // Close channel when done
+		defer close(ch)
 		for {
 			resp, err := stream.Recv()
-			// When the stream ends, we get an EOF error
+			// Handle stream errors and completion
 			if err == io.EOF {
 				ch <- models.ModelResponse{
 					Event:     "end",
@@ -122,7 +120,6 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 			if len(resp.Choices) > 0 {
 				delta := resp.Choices[0].Delta
 				if delta.Content != "" {
-					// Emit content chunk
 					ch <- models.ModelResponse{
 						Event:     "chunk",
 						Data:      delta.Content,
