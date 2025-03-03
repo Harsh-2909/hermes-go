@@ -7,7 +7,8 @@ import (
 	"os"
 
 	"github.com/Harsh-2909/hermes-go/agent"
-	models "github.com/Harsh-2909/hermes-go/models/openai"
+	"github.com/Harsh-2909/hermes-go/models"
+	openai "github.com/Harsh-2909/hermes-go/models/openai"
 
 	"github.com/joho/godotenv"
 )
@@ -20,7 +21,7 @@ func main() {
 	}
 
 	// Initialize the OpenAI model
-	model := &models.OpenAIChat{
+	model := &openai.OpenAIChat{
 		ApiKey: os.Getenv("OPENAI_API_KEY"),
 		Id:     "gpt-4o-mini",
 	}
@@ -61,4 +62,17 @@ func main() {
 	// 		break
 	// 	}
 	// }
+
+	// Multimodal Example
+	// Image content
+	ctx2 := context.Background()
+	image := &models.Image{
+		URL: "https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/ipad-10th-gen-finish-select-202212-pink-wifi_FMT_WHH?wid=1200&hei=630&fmt=jpeg&qlt=95&.v=1670856074755",
+	}
+	response, err = agent.Run(ctx2, "What is in this image?", image)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Println("Assistant:", response.Data)
 }

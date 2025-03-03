@@ -72,15 +72,15 @@ func (agent *Agent) getSystemMessage() models.Message {
 }
 
 // AddMessage appends a new message with the specified role and content to the conversation history.
-func (agent *Agent) AddMessage(role, content string) {
-	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content})
+func (agent *Agent) AddMessage(role, content string, images []*models.Image) {
+	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images})
 }
 
 // Run processes a user message synchronously and returns the model's response.
 // It adds the user message to the history, invokes ChatCompletion on the Model, appends the assistant’s response,
 // and returns the result. Returns an error if the model fails or no messages exist.
-func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelResponse, error) {
-	agent.AddMessage("user", userMessage)
+func (agent *Agent) Run(ctx context.Context, userMessage string, images ...*models.Image) (models.ModelResponse, error) {
+	agent.AddMessage("user", userMessage, images)
 
 	if len(agent.Messages) == 0 {
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
@@ -90,7 +90,7 @@ func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelRe
 	if err != nil {
 		return models.ModelResponse{}, err
 	}
-	agent.AddMessage("assistant", response.Data)
+	agent.AddMessage("assistant", response.Data, nil)
 	return response, nil
 }
 
@@ -98,8 +98,8 @@ func (agent *Agent) Run(ctx context.Context, userMessage string) (models.ModelRe
 // It adds the user message to the history and invokes ChatCompletionStream on the Model.
 // The caller must consume the channel to receive response chunks; the history is not updated here
 // due to the streaming nature (see implementation note).
-func (agent *Agent) RunStream(ctx context.Context, userMessage string) (chan models.ModelResponse, error) {
-	agent.AddMessage("user", userMessage)
+func (agent *Agent) RunStream(ctx context.Context, userMessage string, images ...*models.Image) (chan models.ModelResponse, error) {
+	agent.AddMessage("user", userMessage, images)
 
 	if len(agent.Messages) == 0 {
 		return nil, fmt.Errorf("no messages available for chat completion")

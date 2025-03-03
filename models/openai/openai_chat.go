@@ -36,11 +36,39 @@ func (model *OpenAIChat) Init() {
 
 func convertMessageToOpenAIFormat(messages []models.Message) []openai.ChatCompletionMessage {
 	var openaiMessages []openai.ChatCompletionMessage
+	var chatMessage openai.ChatCompletionMessage
 	for _, msg := range messages {
-		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+		var contentParts []openai.ChatMessagePart
+		if len(msg.Images) > 0 {
+			if msg.Content != "" {
+				contentParts = append(contentParts, openai.ChatMessagePart{
+					Type: "text",
+					Text: msg.Content,
+				})
+			}
+			for _, img := range msg.Images {
+				base64Content, err := img.Content()
+				if err != nil {
+					continue
+				}
+				contentParts = append(contentParts, openai.ChatMessagePart{
+					Type: "image_url",
+					ImageURL: &openai.ChatMessageImageURL{
+						URL: fmt.Sprintf("data:image/jpeg;base64,%s", base64Content),
+					},
+				})
+			}
+			chatMessage = openai.ChatCompletionMessage{
+				Role:         msg.Role,
+				MultiContent: contentParts,
+			}
+		} else {
+			chatMessage = openai.ChatCompletionMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+			}
+		}
+		openaiMessages = append(openaiMessages, chatMessage)
 	}
 	return openaiMessages
 }
