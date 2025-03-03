@@ -73,7 +73,10 @@ func TestConvertMessageToOpenAIFormat(t *testing.T) {
 		{Role: "assistant", Content: "Hi there"},
 		{Role: "user", Content: "Describe this image", Images: []*models.Image{{URL: "http://example.com/image.png"}}},
 	}
-	openaiMessages := convertMessageToOpenAIFormat(messages)
+	openaiMessages, err := convertMessageToOpenAIFormat(messages)
+	if err != nil {
+		t.Fatalf("Error converting messages: %v", err)
+	}
 	if len(openaiMessages) != 3 {
 		t.Fatalf("Expected 3 messages, got %d", len(openaiMessages))
 	}

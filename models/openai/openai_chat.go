@@ -34,7 +34,9 @@ func (model *OpenAIChat) Init() {
 	model.client = openai.NewClient(model.ApiKey)
 }
 
-func convertMessageToOpenAIFormat(messages []models.Message) []openai.ChatCompletionMessage {
+// convertMessageToOpenAIFormat converts a slice of Message instances to OpenAI's ChatCompletionMessage format.
+// It handles text and image content, converting images to base64-encoded URLs.
+func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompletionMessage, error) {
 	var openaiMessages []openai.ChatCompletionMessage
 	var chatMessage openai.ChatCompletionMessage
 	for _, msg := range messages {
@@ -49,7 +51,7 @@ func convertMessageToOpenAIFormat(messages []models.Message) []openai.ChatComple
 			for _, img := range msg.Images {
 				base64Content, err := img.Content()
 				if err != nil {
-					continue
+					return nil, fmt.Errorf("failed to get image content: %w", err)
 				}
 				contentParts = append(contentParts, openai.ChatMessagePart{
 					Type: "image_url",
@@ -70,13 +72,17 @@ func convertMessageToOpenAIFormat(messages []models.Message) []openai.ChatComple
 		}
 		openaiMessages = append(openaiMessages, chatMessage)
 	}
-	return openaiMessages
+	return openaiMessages, nil
 }
 
 // ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
 // It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
 func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
-	openaiMessages := convertMessageToOpenAIFormat(messages)
+	openaiMessages, err := convertMessageToOpenAIFormat(messages)
+	if err != nil {
+		return models.ModelResponse{}, fmt.Errorf("failed to convert messages: %w", err)
+	}
+
 	resp, err := model.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -110,7 +116,11 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 // It emits ModelResponse events ("chunk" for content, "end" for completion, "error" for failures).
 // The caller must consume the channel to process the stream.
 func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
-	openaiMessages := convertMessageToOpenAIFormat(messages)
+	openaiMessages, err := convertMessageToOpenAIFormat(messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert messages: %w", err)
+	}
+
 	stream, err := model.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:       model.Id,
 		Messages:    openaiMessages,
