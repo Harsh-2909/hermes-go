@@ -34,9 +34,7 @@ func (model *OpenAIChat) Init() {
 	model.client = openai.NewClient(model.ApiKey)
 }
 
-// ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
-// It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
-func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
+func convertMessageToOpenAIFormat(messages []models.Message) []openai.ChatCompletionMessage {
 	var openaiMessages []openai.ChatCompletionMessage
 	for _, msg := range messages {
 		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
@@ -44,7 +42,13 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 			Content: msg.Content,
 		})
 	}
+	return openaiMessages
+}
 
+// ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
+// It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
+func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
+	openaiMessages := convertMessageToOpenAIFormat(messages)
 	resp, err := model.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -78,14 +82,7 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 // It emits ModelResponse events ("chunk" for content, "end" for completion, "error" for failures).
 // The caller must consume the channel to process the stream.
 func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
-	var openaiMessages []openai.ChatCompletionMessage
-	for _, msg := range messages {
-		openaiMessages = append(openaiMessages, openai.ChatCompletionMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
-	}
-
+	openaiMessages := convertMessageToOpenAIFormat(messages)
 	stream, err := model.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:       model.Id,
 		Messages:    openaiMessages,
