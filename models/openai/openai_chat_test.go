@@ -71,16 +71,20 @@ func TestConvertMessageToOpenAIFormat(t *testing.T) {
 	messages := []models.Message{
 		{Role: "user", Content: "Hello"},
 		{Role: "assistant", Content: "Hi there"},
+		{Role: "user", Content: "Describe this image", Images: []*models.Image{{URL: "http://example.com/image.png"}}},
 	}
 	openaiMessages := convertMessageToOpenAIFormat(messages)
-	if len(openaiMessages) != 2 {
-		t.Fatalf("Expected 2 messages, got %d", len(openaiMessages))
+	if len(openaiMessages) != 3 {
+		t.Fatalf("Expected 3 messages, got %d", len(openaiMessages))
 	}
 	if openaiMessages[0].Role != "user" || openaiMessages[0].Content != "Hello" {
 		t.Errorf("Unexpected message[0]: %+v", openaiMessages[0])
 	}
 	if openaiMessages[1].Role != "assistant" || openaiMessages[1].Content != "Hi there" {
 		t.Errorf("Unexpected message[1]: %+v", openaiMessages[1])
+	}
+	if openaiMessages[2].Role != "user" || len(openaiMessages[2].MultiContent) != 2 {
+		t.Fatalf("Unexpected message[2]: %+v", openaiMessages[2])
 	}
 }
 

@@ -62,10 +62,18 @@ func TestGetSystemMessage(t *testing.T) {
 }
 
 func TestAddMessage(t *testing.T) {
+	// Text only
 	agent := Agent{Messages: []models.Message{}}
-	agent.AddMessage("user", "Hello")
-	if len(agent.Messages) != 1 || agent.Messages[0].Role != "user" || agent.Messages[0].Content != "Hello" {
-		t.Errorf("Expected message {user, Hello}, got %+v", agent.Messages)
+	agent.AddMessage("user", "Hello", nil)
+	if len(agent.Messages) != 1 || agent.Messages[0].Role != "user" || agent.Messages[0].Content != "Hello" || agent.Messages[0].Images != nil {
+		t.Errorf("Expected message {user, Hello, nil}, got %+v", agent.Messages)
+	}
+
+	// Text with image
+	image := &models.Image{URL: "http://example.com/image.png"}
+	agent.AddMessage("user", "Hello with image", []*models.Image{image})
+	if len(agent.Messages) != 2 || agent.Messages[1].Role != "user" || agent.Messages[1].Content != "Hello with image" || len(agent.Messages[1].Images) != 1 {
+		t.Errorf("Expected message {user, Hello with image, image}, got %+v", agent.Messages)
 	}
 }
 
