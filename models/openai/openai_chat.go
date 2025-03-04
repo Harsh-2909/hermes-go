@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	"github.com/Harsh-2909/hermes-go/utils"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -138,15 +139,18 @@ func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompleti
 func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	openaiMessages, err := convertMessageToOpenAIFormat(messages)
 	if err != nil {
+		utils.Logger.Error("Failed to convert messages", "error", err)
 		return models.ModelResponse{}, fmt.Errorf("failed to convert messages: %w", err)
 	}
 
 	resp, err := model.client.CreateChatCompletion(ctx, model.getChatCompletionRequest(openaiMessages, false))
 	if err != nil {
+		utils.Logger.Error("Failed to get chat completion", "model", model.Id, "error", err)
 		return models.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", model.Id, err)
 	}
 
 	if len(resp.Choices) == 0 {
+		utils.Logger.Error("No response from model")
 		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
 	modelResp := models.ModelResponse{
@@ -169,11 +173,13 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
 	openaiMessages, err := convertMessageToOpenAIFormat(messages)
 	if err != nil {
+		utils.Logger.Error("Failed to convert messages", "error", err)
 		return nil, fmt.Errorf("failed to convert messages: %w", err)
 	}
 
 	stream, err := model.client.CreateChatCompletionStream(ctx, model.getChatCompletionRequest(openaiMessages, true))
 	if err != nil {
+		utils.Logger.Error("Failed to create stream", "error", err)
 		return nil, fmt.Errorf("failed to create stream: %w", err)
 	}
 
