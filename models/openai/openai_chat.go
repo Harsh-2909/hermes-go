@@ -81,7 +81,7 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 	var chatMessage openai.ChatCompletionMessage
 	for _, msg := range messages {
 		var contentParts []openai.ChatMessagePart
-		if len(msg.Images) > 0 {
+		if len(msg.Images) > 0 || len(msg.Audios) > 0 {
 			if msg.Content != "" {
 				contentParts = append(contentParts, openai.ChatMessagePart{
 					Type: "text",
@@ -98,6 +98,24 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 					ImageURL: &openai.ChatMessageImageURL{
 						URL: fmt.Sprintf("data:image/jpeg;base64,%s", base64Content),
 					},
+				})
+			}
+			for _, audio := range msg.Audios {
+				base64Content, err := audio.Content()
+				if err != nil {
+					return nil, fmt.Errorf("failed to get audio content: %w", err)
+				}
+				contentParts = append(contentParts, openai.ChatMessagePart{
+					Type: "audio_url",
+					// sashabaranov/go-openai does not support audio input in their ChatCompletion API yet.
+					// Substituting audio with image for now.
+					// TODO: Once the support is there, fix this part of the code.
+					ImageURL: &openai.ChatMessageImageURL{
+						URL: fmt.Sprintf("data:audio/mpeg;base64,%s", base64Content),
+					},
+					// AudioURL: &openai.ChatMessageAudioURL{
+					// 	URL: fmt.Sprintf("data:audio/mpeg;base64,%s", base64Content),
+					// },
 				})
 			}
 			chatMessage = openai.ChatCompletionMessage{

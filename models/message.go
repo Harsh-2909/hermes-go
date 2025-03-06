@@ -6,4 +6,5 @@ type Message struct {
 	Role    string   // Role of the sender: "system" (instructions), "user" (input), or "assistant" (response)
 	Content string   // Text content of the message
 	Images  []*Image // Images attached to the message
+	Audios  []*Audio // Audio files attached to the message
 }

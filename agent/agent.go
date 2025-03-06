@@ -82,7 +82,8 @@ func (agent *Agent) getSystemMessage() models.Message {
 
 // AddMessage appends a new message with the specified role and content to the conversation history.
 func (agent *Agent) AddMessage(role, content string, images []*models.Image) {
-	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images})
+	// TODO: Handle audio and add test cases
+	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images, Audios: nil})
 }
 
 // Run processes a user message synchronously and returns the model's response.

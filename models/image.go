@@ -4,8 +4,9 @@ package models
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 )
 
 // Image represents an image provided via URL, file path, or base64 content.
@@ -23,7 +24,7 @@ func (img *Image) Content() (string, error) {
 	}
 	// If a file path is provided, read and encode the file
 	if img.FilePath != "" {
-		data, err := ioutil.ReadFile(img.FilePath)
+		data, err := os.ReadFile(img.FilePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read file: %w", err)
 		}
@@ -36,7 +37,7 @@ func (img *Image) Content() (string, error) {
 			return "", fmt.Errorf("failed to fetch image from URL: %w", err)
 		}
 		defer resp.Body.Close()
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", fmt.Errorf("failed to read image data: %w", err)
 		}
