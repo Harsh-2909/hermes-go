@@ -16,6 +16,11 @@ type Image struct {
 	Base64   string // Base64-encoded image content
 }
 
+// GetType returns the type of the media.
+func (img *Image) GetType() string {
+	return "image"
+}
+
 // Content returns the image content as base64, handling different input types.
 func (img *Image) Content() (string, error) {
 	// If base64 is provided directly, return it

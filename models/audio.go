@@ -16,6 +16,11 @@ type Audio struct {
 	Base64   string // Base64-encoded audio content
 }
 
+// GetType returns the type of the media.
+func (a *Audio) GetType() string {
+	return "audio"
+}
+
 // Content returns the audio data as base64, handling different input types.
 func (a *Audio) Content() (string, error) {
 	if a.Base64 != "" {

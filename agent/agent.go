@@ -81,17 +81,29 @@ func (agent *Agent) getSystemMessage() models.Message {
 }
 
 // AddMessage appends a new message with the specified role and content to the conversation history.
-func (agent *Agent) AddMessage(role, content string, images []*models.Image) {
-	// TODO: Handle audio and add test cases
-	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images, Audios: nil})
+func (agent *Agent) AddMessage(role, content string, media []models.Media) {
+	// TODO: Add test cases
+	images := []*models.Image{}
+	audio := []*models.Audio{}
+	for _, m := range media {
+		if m.GetType() == "image" {
+			img := m.(*models.Image)
+			images = append(images, img)
+		}
+		if m.GetType() == "audio" {
+			aud := m.(*models.Audio)
+			audio = append(audio, aud)
+		}
+	}
+	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images, Audios: audio})
 }
 
 // Run processes a user message synchronously and returns the model's response.
 // It adds the user message to the history, invokes ChatCompletion on the Model, appends the assistant’s response,
 // and returns the result. Returns an error if the model fails or no messages exist.
-func (agent *Agent) Run(ctx context.Context, userMessage string, images ...*models.Image) (models.ModelResponse, error) {
+func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models.Media) (models.ModelResponse, error) {
 	utils.Logger.Debug("Agent Run Start")
-	agent.AddMessage("user", userMessage, images)
+	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
@@ -110,9 +122,9 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, images ...*mode
 // It adds the user message to the history and invokes ChatCompletionStream on the Model.
 // The caller must consume the channel to receive response chunks; the history is not updated here
 // due to the streaming nature (see implementation note).
-func (agent *Agent) RunStream(ctx context.Context, userMessage string, images ...*models.Image) (chan models.ModelResponse, error) {
+func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...models.Media) (chan models.ModelResponse, error) {
 	utils.Logger.Debug("Agent RunStream Start")
-	agent.AddMessage("user", userMessage, images)
+	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {
 		return nil, fmt.Errorf("no messages available for chat completion")

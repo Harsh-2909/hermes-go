@@ -31,3 +31,9 @@ type ModelResponse struct {
 	Audio     []byte    // Optional audio data, if supported by the model
 	Thinking  string    // Optional intermediate reasoning or thoughts, if provided
 }
+
+// Media represents a media object (e.g., text, image, audio) that can be processed by AI models.
+type Media interface {
+	GetType() string
+	Content() (string, error)
+}
