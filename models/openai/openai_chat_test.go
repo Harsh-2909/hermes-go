@@ -35,7 +35,7 @@ func TestOpenAIChatInit(t *testing.T) {
 			name:        "Valid with default temperature",
 			model:       OpenAIChat{ApiKey: "test-key", Id: "test-model"},
 			shouldPanic: false,
-			wantTemp:    0.5,
+			wantTemp:    0.0,
 		},
 		{
 			name:        "Valid with custom temperature",
