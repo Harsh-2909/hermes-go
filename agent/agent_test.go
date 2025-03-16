@@ -49,11 +49,13 @@ func TestAgentInit(t *testing.T) {
 
 func TestGetSystemMessage(t *testing.T) {
 	agent := Agent{
+		Model:       &MockModel{},
 		Description: "Test agent",
 		Goal:        "Test goal",
 		Role:        "Test role",
 		Markdown:    true,
 	}
+	agent.Init()
 	msg := agent.getSystemMessage()
 	expected := "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n<additional_information>\n- Use markdown to format your answers.\n</additional_information>\n\n"
 	if msg.Role != "system" || msg.Content != expected {
@@ -63,17 +65,31 @@ func TestGetSystemMessage(t *testing.T) {
 
 func TestAddMessage(t *testing.T) {
 	// Text only
-	agent := Agent{Messages: []models.Message{}}
+	agent := Agent{Model: &MockModel{}}
+	agent.Init()
 	agent.AddMessage("user", "Hello", nil)
-	if len(agent.Messages) != 1 || agent.Messages[0].Role != "user" || agent.Messages[0].Content != "Hello" || agent.Messages[0].Images != nil {
+	if len(agent.Messages) != 1 || agent.Messages[0].Role != "user" || agent.Messages[0].Content != "Hello" || len(agent.Messages[0].Images) != 0 || len(agent.Messages[0].Audios) != 0 {
 		t.Errorf("Expected message {user, Hello, nil}, got %+v", agent.Messages)
 	}
 
 	// Text with image
 	image := &models.Image{URL: "http://example.com/image.png"}
-	agent.AddMessage("user", "Hello with image", []*models.Image{image})
+	agent.AddMessage("user", "Hello with image", []models.Media{image})
 	if len(agent.Messages) != 2 || agent.Messages[1].Role != "user" || agent.Messages[1].Content != "Hello with image" || len(agent.Messages[1].Images) != 1 {
 		t.Errorf("Expected message {user, Hello with image, image}, got %+v", agent.Messages)
+	}
+
+	// Text with audio
+	audio := &models.Audio{URL: "http://example.com/audio.mp3"}
+	agent.AddMessage("user", "Hello with audio", []models.Media{audio})
+	if len(agent.Messages) != 3 || agent.Messages[2].Role != "user" || agent.Messages[2].Content != "Hello with audio" || len(agent.Messages[2].Audios) != 1 {
+		t.Errorf("Expected message {user, Hello with audio, audio}, got %+v", agent.Messages)
+	}
+
+	// Text with image and audio
+	agent.AddMessage("user", "Hello with image and audio", []models.Media{image, audio})
+	if len(agent.Messages) != 4 || agent.Messages[3].Role != "user" || agent.Messages[3].Content != "Hello with image and audio" || len(agent.Messages[3].Images) != 1 || len(agent.Messages[3].Audios) != 1 {
+		t.Errorf("Expected message {user, Hello with image and audio, image, audio}, got %+v", agent.Messages)
 	}
 }
 
