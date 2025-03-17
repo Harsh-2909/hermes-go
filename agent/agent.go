@@ -82,7 +82,6 @@ func (agent *Agent) getSystemMessage() models.Message {
 
 // AddMessage appends a new message with the specified role and content to the conversation history.
 func (agent *Agent) AddMessage(role, content string, media []models.Media) {
-	// TODO: Add test cases
 	images := []*models.Image{}
 	audio := []*models.Audio{}
 	for _, m := range media {
@@ -130,24 +129,28 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 		return nil, fmt.Errorf("no messages available for chat completion")
 	}
 
-	ch, err := agent.Model.ChatCompletionStream(ctx, agent.Messages)
+	respCh, err := agent.Model.ChatCompletionStream(ctx, agent.Messages)
 	if err != nil {
 		return nil, err
 	}
 
 	// Accumulate response in the background for history.
-	// FIXME: This implementation does not work properly as it is consuming the channel before the caller of `RunStream` can consume it.
-	// fullResponse := ""
-	// go func() {
-	// 	for resp := range ch {
-	// 		if resp.Event == "chunk" {
-	// 			fullResponse += resp.Data
-	// 		}
-	// 		// Add handling for other events (e.g., tool calls) as needed
-	// 	}
-	// 	agent.AddMessage("assistant", fullResponse)
-	// 	fmt.Println("DEBUGGING. Full response:", fullResponse)
-	// }()
+	// TODO: Look into a better way to handle this, as it may not be ideal for large responses.
+	ch := make(chan models.ModelResponse)
+	go func() {
+		defer close(ch)
+		fullResponse := ""
+		for resp := range respCh {
+			ch <- resp
+			if resp.Event == "chunk" {
+				fullResponse += resp.Data
+			}
+			if resp.Event == "end" {
+				break
+			}
+		}
+		agent.AddMessage("assistant", fullResponse, nil)
+	}()
 	utils.Logger.Debug("Agent RunStream End")
 	return ch, nil
 }
