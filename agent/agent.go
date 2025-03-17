@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	"github.com/Harsh-2909/hermes-go/tools"
 	"github.com/Harsh-2909/hermes-go/utils"
 )
 
@@ -22,6 +23,11 @@ type Agent struct {
 	Goal          string // Task goal, included in the system message within <your_goal> tags
 	Role          string // Agent's role, included in the system message within <your_role> tags
 	Markdown      bool   // If true, instructs the model to format responses in Markdown
+
+	// Agent Tools
+
+	Tools         []tools.ToolKit // Tools are functions the model may generate JSON inputs for
+	ShowToolCalls bool            // Show tool calls in Agent response
 
 	// Logger related settings
 
@@ -41,10 +47,14 @@ func (agent *Agent) Init() {
 	if agent.Model == nil {
 		panic("Agent must have a model")
 	}
-	// Initialize the model
-	agent.Model.Init()
 	// Handles the logger initialization
 	utils.InitLogger(agent.DebugMode)
+
+	// Initialize the model
+	agent.Model.Init()
+	// Add tools to the model
+	agent.addToolToModel()
+
 	if agent.Messages == nil {
 		agent.Messages = []models.Message{}
 	}
@@ -55,6 +65,34 @@ func (agent *Agent) Init() {
 		}
 	}
 	agent.isInit = true
+}
+
+// GetAllTools returns all tools from the agent.
+// It processes the tools and returns a flat list of tools.
+func (agent *Agent) GetAllTools() []tools.Tool {
+	if len(agent.Tools) == 0 {
+		return []tools.Tool{}
+	}
+	processedTools := make([]tools.Tool, 0)
+	for _, tool := range agent.Tools {
+		if t, ok := tool.(tools.Tool); ok {
+			processedTools = append(processedTools, t)
+		} else {
+			processedTools = append(processedTools, t.Tools()...)
+		}
+	}
+
+	return processedTools
+}
+
+// addToolToModel adds the agent's tools to the model if any are provided.
+// It processes the tools and sets them in the model.
+func (agent *Agent) addToolToModel() {
+	if len(agent.Tools) == 0 {
+		return
+	}
+	processedTools := agent.GetAllTools()
+	agent.Model.SetTools(processedTools)
 }
 
 // getSystemMessage constructs the initial system message based on the agent's settings.

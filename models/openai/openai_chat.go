@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	"github.com/Harsh-2909/hermes-go/tools"
 	"github.com/Harsh-2909/hermes-go/utils"
 	"github.com/sashabaranov/go-openai"
 )
@@ -42,6 +43,7 @@ type OpenAIChat struct {
 
 	client *openai.Client // Internal OpenAI API client
 	isInit bool           // Internal flag to track initialization
+	tools  []tools.Tool   // Internal list of tools
 }
 
 // Init initializes the OpenAIChat instance with defaults and validates required fields.
@@ -80,6 +82,10 @@ func (model *OpenAIChat) Init() {
 
 	model.client = openai.NewClient(model.ApiKey)
 	model.isInit = true
+}
+
+func (model *OpenAIChat) SetTools(tools []tools.Tool) {
+	model.tools = tools
 }
 
 // convertMessageToOpenAIFormat converts a slice of Message instances to OpenAI's ChatCompletionMessage format.
