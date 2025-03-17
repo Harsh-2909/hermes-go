@@ -35,7 +35,8 @@ type Agent struct {
 
 	// Internal fields
 
-	isInit bool // Internal flag to track initialization
+	isInit bool         // Internal flag to track initialization
+	_tools []tools.Tool // Internal list of tools. This is a flat list of tools from the ToolKits using `GetAllTools()`
 }
 
 // Init initializes the Agent with required settings and the system message.
@@ -68,8 +69,16 @@ func (agent *Agent) Init() {
 }
 
 // GetAllTools returns all tools from the agent.
-// It processes the tools and returns a flat list of tools.
 func (agent *Agent) GetAllTools() []tools.Tool {
+	if len(agent._tools) > 0 {
+		return agent._tools
+	}
+	agent._tools = agent.processTools()
+	return agent._tools
+}
+
+// processTools processes the agent's tools and returns a flat list of tools.
+func (agent *Agent) processTools() []tools.Tool {
 	if len(agent.Tools) == 0 {
 		return []tools.Tool{}
 	}
@@ -91,7 +100,11 @@ func (agent *Agent) addToolToModel() {
 	if len(agent.Tools) == 0 {
 		return
 	}
+	utils.Logger.Debug("Adding tools to model")
 	processedTools := agent.GetAllTools()
+	for _, tool := range processedTools {
+		utils.Logger.Debug("Tool added to model", "tool_name", tool.Name)
+	}
 	agent.Model.SetTools(processedTools)
 }
 
@@ -145,25 +158,75 @@ func (agent *Agent) AddMessage(role, content string, media []models.Media) {
 	agent.Messages = append(agent.Messages, models.Message{Role: role, Content: content, Images: images, Audios: audio})
 }
 
+func findTool(tools []tools.Tool, name string) (*tools.Tool, error) {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return &tool, nil
+		}
+	}
+	return nil, fmt.Errorf("tool %s not found", name)
+}
+
 // Run processes a user message synchronously and returns the model's response.
 // It adds the user message to the history, invokes ChatCompletion on the Model, appends the assistant’s response,
 // and returns the result. Returns an error if the model fails or no messages exist.
 func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models.Media) (models.ModelResponse, error) {
-	utils.Logger.Debug("Agent Run Start")
 	agent.Init() // Ensure the agent is initialized
+	utils.Logger.Debug("Agent Run Start")
 	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
 	}
 
-	response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
-	if err != nil {
-		return models.ModelResponse{}, err
+	for {
+		response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
+		if err != nil {
+			return models.ModelResponse{}, err
+		}
+
+		assistantMessage := models.Message{
+			Role:    "assistant",
+			Content: response.Data,
+		}
+		if response.Event == "tool_call" {
+			// fmt.Printf("\n%+v\n", response)
+			assistantMessage.ToolCalls = response.ToolCalls
+			agent.Messages = append(agent.Messages, assistantMessage)
+
+			for _, toolCall := range response.ToolCalls {
+				tool, err := findTool(agent.GetAllTools(), toolCall.Name)
+				if err != nil {
+					utils.Logger.Error("Tool not found", "name", toolCall.Name, "error", err)
+					agent.Messages = append(agent.Messages, models.Message{
+						Role:       "tool",
+						Content:    fmt.Sprintf("Error: tool %s not found", toolCall.Name),
+						ToolCallID: toolCall.ID,
+					})
+					continue
+				}
+				utils.Logger.Debug("Executing tool", "name", toolCall.Name)
+				result, err := tool.Execute(ctx, toolCall.Arguments)
+				if err != nil {
+					utils.Logger.Error("Tool execution failed", "name", toolCall.Name, "error", err)
+					result = fmt.Sprintf("Error: %v", err)
+				}
+				utils.Logger.Debug("Tool execution complete", "name", toolCall.Name, "result", result)
+				agent.Messages = append(agent.Messages, models.Message{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: toolCall.ID,
+				})
+			}
+
+		} else if response.Event == "complete" {
+			agent.Messages = append(agent.Messages, assistantMessage)
+			utils.Logger.Debug("Agent Run End")
+			return response, nil
+		} else {
+			return models.ModelResponse{}, fmt.Errorf("unexpected event type: %s", response.Event)
+		}
 	}
-	agent.AddMessage("assistant", response.Data, nil)
-	utils.Logger.Debug("Agent Run End")
-	return response, nil
 }
 
 // RunStream processes a user message and returns a channel for streaming model responses.
@@ -171,8 +234,8 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 // The caller must consume the channel to receive response chunks; the history is not updated here
 // due to the streaming nature (see implementation note).
 func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...models.Media) (chan models.ModelResponse, error) {
-	utils.Logger.Debug("Agent RunStream Start")
 	agent.Init() // Ensure the agent is initialized
+	utils.Logger.Debug("Agent RunStream Start")
 	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {

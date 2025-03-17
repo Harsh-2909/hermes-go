@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	"github.com/Harsh-2909/hermes-go/tools"
 )
 
 // MockModel is a mock implementation of the Model interface for testing.
 type MockModel struct{}
 
-func (m *MockModel) Init() {}
+func (m *MockModel) Init()                       {}
+func (m *MockModel) SetTools(tools []tools.Tool) {}
 func (m *MockModel) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	return models.ModelResponse{
 		Event:     "complete",

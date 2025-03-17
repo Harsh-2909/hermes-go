@@ -27,7 +27,7 @@ type Usage struct {
 // ModelResponse represents a response from an AI model.
 // It is used for both synchronous responses (Event="complete") and streaming chunks (e.g., Event="chunk", "end").
 type ModelResponse struct {
-	Event     string           // Event type: "chunk" (partial data), "complete" (full response), "end" (stream end), etc.
+	Event     string           // Event type: "chunk" (partial data), "complete" (full response), "end" (stream end), "tool_call" (tool execution), etc.
 	Data      string           // Response content or chunk data
 	Usage     *Usage           // Token usage metrics, typically set for "complete" or "end" events; nullable
 	CreatedAt time.Time        // Timestamp when the response was generated

@@ -94,8 +94,30 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 	var openaiMessages []openai.ChatCompletionMessage
 	var chatMessage openai.ChatCompletionMessage
 	for _, msg := range messages {
-		var contentParts []openai.ChatMessagePart
+		chatMessage = openai.ChatCompletionMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			var toolCalls []openai.ToolCall
+			for _, tc := range msg.ToolCalls {
+				toolCalls = append(toolCalls, openai.ToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openai.FunctionCall{
+						Name:      tc.Name,
+						Arguments: tc.Arguments,
+					},
+				})
+			}
+			chatMessage.ToolCalls = toolCalls
+		} else if msg.Role == "tool" {
+			chatMessage.ToolCallID = msg.ToolCallID
+		}
+
+		// Handle multiple modalities
 		if len(msg.Images) > 0 || len(msg.Audios) > 0 {
+			var contentParts []openai.ChatMessagePart
 			if msg.Content != "" {
 				contentParts = append(contentParts, openai.ChatMessagePart{
 					Type: "text",
@@ -136,12 +158,13 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 				Role:         msg.Role,
 				MultiContent: contentParts,
 			}
-		} else {
-			chatMessage = openai.ChatCompletionMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
 		}
+		// else {
+		// 	chatMessage = openai.ChatCompletionMessage{
+		// 		Role:    msg.Role,
+		// 		Content: msg.Content,
+		// 	}
+		// }
 		openaiMessages = append(openaiMessages, chatMessage)
 	}
 	return openaiMessages, nil
@@ -149,6 +172,19 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 
 // getChatCompletionRequest constructs an OpenAI ChatCompletionRequest from the model's settings and input messages.
 func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompletionMessage, stream bool) openai.ChatCompletionRequest {
+	// Convert tools to OpenAI format
+	var openaiTools []openai.Tool
+	for _, tool := range model.tools {
+		openaiTools = append(openaiTools, openai.Tool{
+			Type: "function",
+			Function: &openai.FunctionDefinition{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			},
+		})
+	}
+
 	return openai.ChatCompletionRequest{
 		Model:               model.Id,
 		Messages:            messages,
@@ -163,6 +199,7 @@ func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompleti
 		N:                   model.N,
 		User:                model.User,
 		Stream:              stream,
+		Tools:               openaiTools,
 	}
 }
 
@@ -185,9 +222,9 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		utils.Logger.Error("No response from model")
 		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
+	choice := resp.Choices[0]
 	modelResp := models.ModelResponse{
-		Event:     "complete",
-		Data:      resp.Choices[0].Message.Content,
+		Data:      choice.Message.Content,
 		Usage:     nil,
 		CreatedAt: time.Now(),
 	}
@@ -195,6 +232,19 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		TotalTokens:      resp.Usage.TotalTokens,
+	}
+	if choice.FinishReason == "tool_calls" {
+		modelResp.Event = "tool_call"
+		for _, toolCall := range choice.Message.ToolCalls {
+			utils.Logger.Debug("Tool call received", "tool_name", toolCall.Function.Name, "arguments", toolCall.Function.Arguments)
+			modelResp.ToolCalls = append(modelResp.ToolCalls, tools.ToolCall{
+				ID:        toolCall.ID,
+				Name:      toolCall.Function.Name,
+				Arguments: toolCall.Function.Arguments,
+			})
+		}
+	} else {
+		modelResp.Event = "complete"
 	}
 	return modelResp, nil
 }

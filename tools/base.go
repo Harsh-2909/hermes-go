@@ -1,8 +1,11 @@
 package tools
 
-import "context"
+import (
+	"context"
+)
 
 // Tool represents a single tool that the agent can call.
+// TODO: Need to create a format for Parameters which will then be converted based on the model's requirements
 type Tool struct {
 	Name        string                                                 // Unique name of the tool
 	Description string                                                 // Description for the model to understand the tool's purpose
@@ -14,6 +17,15 @@ type Tool struct {
 // This function exists to implement the ToolKit interface
 func (t Tool) Tools() []Tool {
 	return []Tool{t}
+}
+
+func NewTool(name, description string, parameters map[string]interface{}, execute func(ctx context.Context, args string) (string, error)) Tool {
+	return Tool{
+		Name:        name,
+		Description: description,
+		Parameters:  parameters,
+		Execute:     execute,
+	}
 }
 
 // ToolCall represents a request from the model to call a tool.
