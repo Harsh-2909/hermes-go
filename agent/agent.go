@@ -26,14 +26,23 @@ type Agent struct {
 	// Logger related settings
 
 	DebugMode bool // If true, enables debug mode for additional logging
+
+	// Internal fields
+
+	isInit bool // Internal flag to track initialization
 }
 
 // Init initializes the Agent with required settings and the system message.
 // It panics if no Model is provided and ensures Messages is initialized before appending the system message.
 func (agent *Agent) Init() {
+	if agent.isInit {
+		return
+	}
 	if agent.Model == nil {
 		panic("Agent must have a model")
 	}
+	// Initialize the model
+	agent.Model.Init()
 	// Handles the logger initialization
 	utils.InitLogger(agent.DebugMode)
 	if agent.Messages == nil {
@@ -45,6 +54,7 @@ func (agent *Agent) Init() {
 			agent.Messages = append(agent.Messages, systemMessage)
 		}
 	}
+	agent.isInit = true
 }
 
 // getSystemMessage constructs the initial system message based on the agent's settings.
@@ -102,6 +112,7 @@ func (agent *Agent) AddMessage(role, content string, media []models.Media) {
 // and returns the result. Returns an error if the model fails or no messages exist.
 func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models.Media) (models.ModelResponse, error) {
 	utils.Logger.Debug("Agent Run Start")
+	agent.Init() // Ensure the agent is initialized
 	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {
@@ -123,6 +134,7 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 // due to the streaming nature (see implementation note).
 func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...models.Media) (chan models.ModelResponse, error) {
 	utils.Logger.Debug("Agent RunStream Start")
+	agent.Init() // Ensure the agent is initialized
 	agent.AddMessage("user", userMessage, media)
 
 	if len(agent.Messages) == 0 {

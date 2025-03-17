@@ -14,12 +14,11 @@ import (
 
 // OpenAIChat implements the Model interface for OpenAI's Chat API.
 type OpenAIChat struct {
-	client           *openai.Client // Internal OpenAI API client
-	ApiKey           string         // Required OpenAI API key.
-	Id               string         // Required model ID (e.g., "gpt-4o-mini")
-	Temperature      float32        // In [0,2] range. Higher values -> more creative.
-	PresencePenalty  float32        // In [-2,2] range.
-	FrequencyPenalty float32        // In [-2,2] range.
+	ApiKey           string  // Required OpenAI API key.
+	Id               string  // Required model ID (e.g., "gpt-4o-mini")
+	Temperature      float32 // In [0,2] range. Higher values -> more creative.
+	PresencePenalty  float32 // In [-2,2] range.
+	FrequencyPenalty float32 // In [-2,2] range.
 	Stop             []string
 	N                int
 	User             string
@@ -38,11 +37,19 @@ type OpenAIChat struct {
 	// token position, each with an associated log probability.
 	// logprobs must be set to true if this parameter is used.
 	TopLogProbs int
+
+	// Internal fields
+
+	client *openai.Client // Internal OpenAI API client
+	isInit bool           // Internal flag to track initialization
 }
 
 // Init initializes the OpenAIChat instance with defaults and validates required fields.
 // It panics if ApiKey or Id is missing.
 func (model *OpenAIChat) Init() {
+	if model.isInit {
+		return
+	}
 	if model.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
 	}
@@ -72,6 +79,7 @@ func (model *OpenAIChat) Init() {
 	}
 
 	model.client = openai.NewClient(model.ApiKey)
+	model.isInit = true
 }
 
 // convertMessageToOpenAIFormat converts a slice of Message instances to OpenAI's ChatCompletionMessage format.
