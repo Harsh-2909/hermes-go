@@ -8,18 +8,18 @@ import (
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	"github.com/Harsh-2909/hermes-go/tools"
 	"github.com/Harsh-2909/hermes-go/utils"
 	"github.com/sashabaranov/go-openai"
 )
 
 // OpenAIChat implements the Model interface for OpenAI's Chat API.
 type OpenAIChat struct {
-	client           *openai.Client // Internal OpenAI API client
-	ApiKey           string         // Required OpenAI API key.
-	Id               string         // Required model ID (e.g., "gpt-4o-mini")
-	Temperature      float32        // In [0,2] range. Higher values -> more creative.
-	PresencePenalty  float32        // In [-2,2] range.
-	FrequencyPenalty float32        // In [-2,2] range.
+	ApiKey           string  // Required OpenAI API key.
+	Id               string  // Required model ID (e.g., "gpt-4o-mini")
+	Temperature      float32 // In [0,2] range. Higher values -> more creative.
+	PresencePenalty  float32 // In [-2,2] range.
+	FrequencyPenalty float32 // In [-2,2] range.
 	Stop             []string
 	N                int
 	User             string
@@ -38,11 +38,20 @@ type OpenAIChat struct {
 	// token position, each with an associated log probability.
 	// logprobs must be set to true if this parameter is used.
 	TopLogProbs int
+
+	// Internal fields
+
+	client *openai.Client // Internal OpenAI API client
+	isInit bool           // Internal flag to track initialization
+	tools  []tools.Tool   // Internal list of tools
 }
 
 // Init initializes the OpenAIChat instance with defaults and validates required fields.
 // It panics if ApiKey or Id is missing.
 func (model *OpenAIChat) Init() {
+	if model.isInit {
+		return
+	}
 	if model.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
 	}
@@ -72,6 +81,11 @@ func (model *OpenAIChat) Init() {
 	}
 
 	model.client = openai.NewClient(model.ApiKey)
+	model.isInit = true
+}
+
+func (model *OpenAIChat) SetTools(tools []tools.Tool) {
+	model.tools = tools
 }
 
 // convertMessageToOpenAIFormat converts a slice of Message instances to OpenAI's ChatCompletionMessage format.
@@ -80,8 +94,30 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 	var openaiMessages []openai.ChatCompletionMessage
 	var chatMessage openai.ChatCompletionMessage
 	for _, msg := range messages {
-		var contentParts []openai.ChatMessagePart
+		chatMessage = openai.ChatCompletionMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			var toolCalls []openai.ToolCall
+			for _, tc := range msg.ToolCalls {
+				toolCalls = append(toolCalls, openai.ToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openai.FunctionCall{
+						Name:      tc.Name,
+						Arguments: tc.Arguments,
+					},
+				})
+			}
+			chatMessage.ToolCalls = toolCalls
+		} else if msg.Role == "tool" {
+			chatMessage.ToolCallID = msg.ToolCallID
+		}
+
+		// Handle multiple modalities
 		if len(msg.Images) > 0 || len(msg.Audios) > 0 {
+			var contentParts []openai.ChatMessagePart
 			if msg.Content != "" {
 				contentParts = append(contentParts, openai.ChatMessagePart{
 					Type: "text",
@@ -122,12 +158,13 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 				Role:         msg.Role,
 				MultiContent: contentParts,
 			}
-		} else {
-			chatMessage = openai.ChatCompletionMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
 		}
+		// else {
+		// 	chatMessage = openai.ChatCompletionMessage{
+		// 		Role:    msg.Role,
+		// 		Content: msg.Content,
+		// 	}
+		// }
 		openaiMessages = append(openaiMessages, chatMessage)
 	}
 	return openaiMessages, nil
@@ -135,6 +172,19 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 
 // getChatCompletionRequest constructs an OpenAI ChatCompletionRequest from the model's settings and input messages.
 func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompletionMessage, stream bool) openai.ChatCompletionRequest {
+	// Convert tools to OpenAI format
+	var openaiTools []openai.Tool
+	for _, tool := range model.tools {
+		openaiTools = append(openaiTools, openai.Tool{
+			Type: "function",
+			Function: &openai.FunctionDefinition{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			},
+		})
+	}
+
 	return openai.ChatCompletionRequest{
 		Model:               model.Id,
 		Messages:            messages,
@@ -149,6 +199,7 @@ func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompleti
 		N:                   model.N,
 		User:                model.User,
 		Stream:              stream,
+		Tools:               openaiTools,
 	}
 }
 
@@ -171,9 +222,9 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		utils.Logger.Error("No response from model")
 		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
+	choice := resp.Choices[0]
 	modelResp := models.ModelResponse{
-		Event:     "complete",
-		Data:      resp.Choices[0].Message.Content,
+		Data:      choice.Message.Content,
 		Usage:     nil,
 		CreatedAt: time.Now(),
 	}
@@ -181,6 +232,19 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		TotalTokens:      resp.Usage.TotalTokens,
+	}
+	if choice.FinishReason == "tool_calls" {
+		modelResp.Event = "tool_call"
+		for _, toolCall := range choice.Message.ToolCalls {
+			utils.Logger.Debug("Tool call received", "tool_name", toolCall.Function.Name, "arguments", toolCall.Function.Arguments)
+			modelResp.ToolCalls = append(modelResp.ToolCalls, tools.ToolCall{
+				ID:        toolCall.ID,
+				Name:      toolCall.Function.Name,
+				Arguments: toolCall.Function.Arguments,
+			})
+		}
+	} else {
+		modelResp.Event = "complete"
 	}
 	return modelResp, nil
 }
@@ -204,15 +268,14 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 	ch := make(chan models.ModelResponse)
 	go func() {
 		defer close(ch)
+		content := ""
+		toolCalls := make(map[int]*tools.ToolCall)
 		for {
 			resp, err := stream.Recv()
 			// Handle stream errors and completion
 			if err == io.EOF {
-				ch <- models.ModelResponse{
-					Event:     "end",
-					CreatedAt: time.Now(),
-				}
-				return
+				// Break from the loop to handle end event message after the loop
+				break
 			}
 			if err != nil {
 				ch <- models.ModelResponse{
@@ -222,16 +285,62 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 				}
 				return
 			}
-			if len(resp.Choices) > 0 {
-				delta := resp.Choices[0].Delta
-				if delta.Content != "" {
-					ch <- models.ModelResponse{
-						Event:     "chunk",
-						Data:      delta.Content,
-						CreatedAt: time.Now(),
+			if len(resp.Choices) == 0 {
+				continue
+			}
+			delta := resp.Choices[0].Delta
+			if delta.Content != "" {
+				content += delta.Content
+				ch <- models.ModelResponse{
+					Event:     "chunk",
+					Data:      delta.Content,
+					CreatedAt: time.Now(),
+				}
+			}
+
+			// Accumulate tool call deltas
+			if len(delta.ToolCalls) > 0 {
+				for _, tcDelta := range delta.ToolCalls {
+					if tc, exists := toolCalls[*tcDelta.Index]; exists {
+						// Append arguments to existing tool call
+						tc.Arguments += tcDelta.Function.Arguments
+					} else {
+						// Start a new tool call
+						toolCalls[*tcDelta.Index] = &tools.ToolCall{
+							ID:        tcDelta.ID,
+							Name:      tcDelta.Function.Name,
+							Arguments: tcDelta.Function.Arguments,
+						}
 					}
 				}
 			}
+		}
+
+		// After streaming ends, check for event
+		if len(toolCalls) > 0 {
+			var finalToolCalls []tools.ToolCall
+			for _, tc := range toolCalls {
+				finalToolCalls = append(finalToolCalls, *tc)
+			}
+			ch <- models.ModelResponse{
+				Event:     "tool_call",
+				Data:      content,
+				ToolCalls: finalToolCalls,
+				CreatedAt: time.Now(),
+			}
+		}
+		// else {
+		// 	// TODO: Do I even need this complete event with the whole data.
+		// 	ch <- models.ModelResponse{
+		// 		Event:     "complete",
+		// 		Data:      content,
+		// 		CreatedAt: time.Now(),
+		// 	}
+		// }
+		// TODO: Find a way to send usage data in the final event.
+		ch <- models.ModelResponse{
+			Event:     "end",
+			CreatedAt: time.Now(),
 		}
 	}()
 
