@@ -268,15 +268,14 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 	ch := make(chan models.ModelResponse)
 	go func() {
 		defer close(ch)
+		content := ""
+		toolCalls := make(map[int]*tools.ToolCall)
 		for {
 			resp, err := stream.Recv()
 			// Handle stream errors and completion
 			if err == io.EOF {
-				ch <- models.ModelResponse{
-					Event:     "end",
-					CreatedAt: time.Now(),
-				}
-				return
+				// Break from the loop to handle end event message after the loop
+				break
 			}
 			if err != nil {
 				ch <- models.ModelResponse{
@@ -286,16 +285,62 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 				}
 				return
 			}
-			if len(resp.Choices) > 0 {
-				delta := resp.Choices[0].Delta
-				if delta.Content != "" {
-					ch <- models.ModelResponse{
-						Event:     "chunk",
-						Data:      delta.Content,
-						CreatedAt: time.Now(),
+			if len(resp.Choices) == 0 {
+				continue
+			}
+			delta := resp.Choices[0].Delta
+			if delta.Content != "" {
+				content += delta.Content
+				ch <- models.ModelResponse{
+					Event:     "chunk",
+					Data:      delta.Content,
+					CreatedAt: time.Now(),
+				}
+			}
+
+			// Accumulate tool call deltas
+			if len(delta.ToolCalls) > 0 {
+				for _, tcDelta := range delta.ToolCalls {
+					if tc, exists := toolCalls[*tcDelta.Index]; exists {
+						// Append arguments to existing tool call
+						tc.Arguments += tcDelta.Function.Arguments
+					} else {
+						// Start a new tool call
+						toolCalls[*tcDelta.Index] = &tools.ToolCall{
+							ID:        tcDelta.ID,
+							Name:      tcDelta.Function.Name,
+							Arguments: tcDelta.Function.Arguments,
+						}
 					}
 				}
 			}
+		}
+
+		// After streaming ends, check for event
+		if len(toolCalls) > 0 {
+			var finalToolCalls []tools.ToolCall
+			for _, tc := range toolCalls {
+				finalToolCalls = append(finalToolCalls, *tc)
+			}
+			ch <- models.ModelResponse{
+				Event:     "tool_call",
+				Data:      content,
+				ToolCalls: finalToolCalls,
+				CreatedAt: time.Now(),
+			}
+		}
+		// else {
+		// 	// TODO: Do I even need this complete event with the whole data.
+		// 	ch <- models.ModelResponse{
+		// 		Event:     "complete",
+		// 		Data:      content,
+		// 		CreatedAt: time.Now(),
+		// 	}
+		// }
+		// TODO: Find a way to send usage data in the final event.
+		ch <- models.ModelResponse{
+			Event:     "end",
+			CreatedAt: time.Now(),
 		}
 	}()
 

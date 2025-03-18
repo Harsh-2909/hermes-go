@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
 	"github.com/Harsh-2909/hermes-go/tools"
@@ -242,27 +243,88 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 		return nil, fmt.Errorf("no messages available for chat completion")
 	}
 
-	respCh, err := agent.Model.ChatCompletionStream(ctx, agent.Messages)
-	if err != nil {
-		return nil, err
-	}
-
 	// Accumulate response in the background for history.
 	// TODO: Look into a better way to handle this, as it may not be ideal for large responses.
 	ch := make(chan models.ModelResponse)
 	go func() {
 		defer close(ch)
-		fullResponse := ""
-		for resp := range respCh {
-			ch <- resp
-			if resp.Event == "chunk" {
-				fullResponse += resp.Data
+		for {
+			respCh, err := agent.Model.ChatCompletionStream(ctx, agent.Messages)
+			if err != nil {
+				ch <- models.ModelResponse{
+					Event:     "error",
+					Data:      err.Error(),
+					CreatedAt: time.Now(),
+				}
+				return
 			}
-			if resp.Event == "end" {
-				break
+
+			fullResponse := ""
+			var toolCalls []tools.ToolCall
+			for resp := range respCh {
+				if resp.Event == "chunk" {
+					fullResponse += resp.Data
+					ch <- resp // Forward content to the user
+				} else if resp.Event == "tool_call" {
+					toolCalls = resp.ToolCalls
+					if resp.Data != "" {
+						fullResponse += resp.Data
+						ch <- models.ModelResponse{
+							Event:     "chunk",
+							Data:      resp.Data,
+							CreatedAt: time.Now(),
+						}
+					}
+				} else if resp.Event == "end" {
+					// Break from the loop and handle the logic outside the response channel loop
+					break
+				}
+			}
+			assistantMessage := models.Message{
+				Role:    "assistant",
+				Content: fullResponse,
+			}
+
+			if len(toolCalls) > 0 {
+				// Add assistant message with tool call
+				assistantMessage.ToolCalls = toolCalls
+				agent.Messages = append(agent.Messages, assistantMessage)
+
+				// Execute tools and add results in Messages
+				for _, toolCall := range toolCalls {
+					tool, err := findTool(agent.GetAllTools(), toolCall.Name)
+					if err != nil {
+						utils.Logger.Error("Tool not found", "name", toolCall.Name, "error", err)
+						agent.Messages = append(agent.Messages, models.Message{
+							Role:       "tool",
+							Content:    fmt.Sprintf("Error: tool %s not found", toolCall.Name),
+							ToolCallID: toolCall.ID,
+						})
+						continue
+					}
+					utils.Logger.Debug("Executing tool", "name", toolCall.Name)
+					result, err := tool.Execute(ctx, toolCall.Arguments)
+					if err != nil {
+						utils.Logger.Error("Tool execution failed", "name", toolCall.Name, "error", err)
+						result = fmt.Sprintf("Error: %v", err)
+					}
+					utils.Logger.Debug("Tool execution complete", "name", toolCall.Name, "result", result)
+					agent.Messages = append(agent.Messages, models.Message{
+						Role:       "tool",
+						Content:    result,
+						ToolCallID: toolCall.ID,
+					})
+				}
+			} else {
+				// Add assistant message without tool call
+				agent.Messages = append(agent.Messages, assistantMessage)
+				// Send the end event to the channel
+				ch <- models.ModelResponse{
+					Event:     "end",
+					CreatedAt: time.Now(),
+				}
 			}
 		}
-		agent.AddMessage("assistant", fullResponse, nil)
 	}()
 	utils.Logger.Debug("Agent RunStream End")
 	return ch, nil
