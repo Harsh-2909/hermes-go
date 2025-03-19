@@ -88,7 +88,7 @@ func (agent *Agent) processTools() []tools.Tool {
 		if t, ok := tool.(tools.Tool); ok {
 			processedTools = append(processedTools, t)
 		} else {
-			processedTools = append(processedTools, t.Tools()...)
+			processedTools = append(processedTools, tool.Tools()...)
 		}
 	}
 
