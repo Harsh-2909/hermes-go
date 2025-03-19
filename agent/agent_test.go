@@ -7,13 +7,19 @@ import (
 
 	"github.com/Harsh-2909/hermes-go/models"
 	"github.com/Harsh-2909/hermes-go/tools"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // MockModel is a mock implementation of the Model interface for testing.
-type MockModel struct{}
+type MockModel struct {
+	tools []tools.Tool
+}
 
-func (m *MockModel) Init()                       {}
-func (m *MockModel) SetTools(tools []tools.Tool) {}
+func (m *MockModel) Init() {}
+func (m *MockModel) SetTools(tools []tools.Tool) {
+	m.tools = tools
+}
 func (m *MockModel) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	return models.ModelResponse{
 		Event:     "complete",
@@ -124,5 +130,220 @@ func TestRunStream(t *testing.T) {
 	}
 	if count != 2 { // chunk + end
 		t.Errorf("Expected 2 events, got %d", count)
+	}
+}
+
+// MockTool is a simple implementation of the Tool interface for testing
+func createMockTool(name string) tools.Tool {
+	return tools.Tool{
+		Name:        name,
+		Description: "Test tool " + name,
+		Parameters:  map[string]interface{}{"param": "test"},
+		Execute: func(ctx context.Context, args string) (string, error) {
+			return "Executed " + name, nil
+		},
+	}
+}
+
+// MockToolKit is a simple implementation of the ToolKit interface for testing
+type MockToolKit struct {
+	ToolNames []string
+}
+
+func (tk *MockToolKit) Tools() []tools.Tool {
+	var toolList []tools.Tool
+	for _, name := range tk.ToolNames {
+		toolList = append(toolList, createMockTool(name))
+	}
+	return toolList
+}
+
+func TestProcessTools(t *testing.T) {
+	tests := []struct {
+		name     string
+		tools    []tools.ToolKit
+		expected int
+	}{
+		{
+			name:     "Empty tool list",
+			tools:    []tools.ToolKit{},
+			expected: 0,
+		},
+		{
+			name:     "Single tool",
+			tools:    []tools.ToolKit{createMockTool("tool1")},
+			expected: 1,
+		},
+		{
+			name:     "Multiple tools as Tool implementations",
+			tools:    []tools.ToolKit{createMockTool("tool1"), createMockTool("tool2")},
+			expected: 2,
+		},
+		{
+			name: "Mixed Tool and ToolKit implementations",
+			tools: []tools.ToolKit{
+				createMockTool("tool1"),
+				&MockToolKit{ToolNames: []string{"kit-tool1", "kit-tool2"}},
+			},
+			expected: 3,
+		},
+		{
+			name: "Multiple ToolKit implementations",
+			tools: []tools.ToolKit{
+				&MockToolKit{ToolNames: []string{"kit1-tool1", "kit1-tool2"}},
+				&MockToolKit{ToolNames: []string{"kit2-tool1", "kit2-tool2", "kit2-tool3"}},
+			},
+			expected: 5,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := Agent{Model: &MockModel{}, Tools: tc.tools}
+			processedTools := agent.processTools()
+
+			assert.Equal(t, tc.expected, len(processedTools), "Processed tools count should match expected")
+
+			// Check that all tools were properly processed with correct names
+			if tc.expected > 0 {
+				toolNames := make(map[string]bool)
+				for _, tool := range processedTools {
+					toolNames[tool.Name] = true
+				}
+
+				// Verify all expected tools are present
+				for _, toolkit := range tc.tools {
+					if tool, ok := toolkit.(tools.Tool); ok {
+						assert.True(t, toolNames[tool.Name], "Tool %s should be in processed tools", tool.Name)
+					} else {
+						for _, tool := range toolkit.Tools() {
+							assert.True(t, toolNames[tool.Name], "Tool %s should be in processed tools", tool.Name)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGetAllTools(t *testing.T) {
+	// Test case 1: Empty tools list
+	t.Run("Empty tools list", func(t *testing.T) {
+		agent := Agent{Tools: []tools.ToolKit{}}
+		tools := agent.GetAllTools()
+		assert.Empty(t, tools, "Tools should be empty")
+	})
+
+	// Test case 2: First call with no cached tools
+	t.Run("First call with no cached tools", func(t *testing.T) {
+		agent := Agent{
+			Tools: []tools.ToolKit{
+				createMockTool("tool1"),
+				createMockTool("tool2"),
+			},
+		}
+
+		// Verify _tools is empty before call
+		assert.Empty(t, agent._tools, "_tools should be empty before first call")
+
+		// Get all tools should process and cache
+		tools := agent.GetAllTools()
+		assert.Len(t, tools, 2, "Should return 2 tools")
+		assert.Len(t, agent._tools, 2, "_tools should be cached with 2 tools")
+
+		// Verify tool names
+		names := []string{tools[0].Name, tools[1].Name}
+		assert.Contains(t, names, "tool1")
+		assert.Contains(t, names, "tool2")
+	})
+
+	// Test case 3: Second call should use cached tools
+	t.Run("Second call should use cached tools", func(t *testing.T) {
+		// Setup agent with tools
+		agent := Agent{
+			Tools: []tools.ToolKit{
+				createMockTool("tool1"),
+				createMockTool("tool2"),
+			},
+		}
+
+		// First call to cache tools
+		firstTools := agent.GetAllTools()
+		assert.Len(t, firstTools, 2)
+
+		// Modify Tools but keep _tools cache
+		agent.Tools = append(agent.Tools, createMockTool("tool3"))
+
+		// Second call should use cached version
+		secondTools := agent.GetAllTools()
+		assert.Len(t, secondTools, 2, "Should still return 2 tools from cache")
+		assert.Equal(t, firstTools, secondTools, "Should return same tools from cache")
+
+		// Clear cache and call again
+		agent._tools = nil
+		thirdTools := agent.GetAllTools()
+		assert.Len(t, thirdTools, 3, "Should return 3 tools after cache cleared")
+	})
+}
+
+func TestAddToolToModel(t *testing.T) {
+	tests := []struct {
+		name     string
+		tools    []tools.ToolKit
+		expected int
+	}{
+		{
+			name:     "Empty tool list",
+			tools:    []tools.ToolKit{},
+			expected: 0,
+		},
+		{
+			name:     "Single tool",
+			tools:    []tools.ToolKit{createMockTool("tool1")},
+			expected: 1,
+		},
+		{
+			name: "Mixed Tool and ToolKit implementations",
+			tools: []tools.ToolKit{
+				createMockTool("tool1"),
+				&MockToolKit{ToolNames: []string{"kit-tool1", "kit-tool2"}},
+			},
+			expected: 3,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a custom mock model to verify SetTools is called correctly
+			// mockModel := &struct {
+			// 	MockModel
+			// 	toolsSet []tools.Tool
+			// }{}
+			mockModel := &MockModel{}
+
+			// Override SetTools to track which tools were set
+			// mockModel.SetTools = func(tools []tools.Tool) {
+			// 	mockModel.toolsSet = tools
+			// }
+
+			agent := Agent{
+				Model: mockModel,
+				Tools: tc.tools,
+			}
+
+			// Call the method being tested
+			agent.addToolToModel()
+
+			// Verify the correct tools were set on the model
+			if tc.expected == 0 {
+				assert.Empty(t, mockModel.tools, "No tools should be set for empty tool list")
+			} else {
+				assert.Len(t, mockModel.tools, tc.expected, "Model should receive correct number of tools")
+
+				// Verify all tools were set with the correct names
+				allTools := agent.GetAllTools()
+				assert.Equal(t, allTools, mockModel.tools, "All tools should be passed to the model")
+			}
+		})
 	}
 }
