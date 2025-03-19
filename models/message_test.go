@@ -2,6 +2,8 @@ package models
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMessageWithDifferentRoles(t *testing.T) {
@@ -38,12 +40,8 @@ func TestMessageWithDifferentRoles(t *testing.T) {
 				Content: tt.content,
 			}
 
-			if msg.Role != tt.wantRole {
-				t.Errorf("Message.Role = %v, want %v", msg.Role, tt.wantRole)
-			}
-			if msg.Content != tt.content {
-				t.Errorf("Message.Content = %v, want %v", msg.Content, tt.content)
-			}
+			assert.Equal(t, tt.wantRole, msg.Role)
+			assert.Equal(t, tt.content, msg.Content)
 		})
 	}
 }
@@ -57,15 +55,10 @@ func TestMessageWithTextOnly(t *testing.T) {
 		Audios:  nil,
 	}
 
-	if msg.Content != content {
-		t.Errorf("Message.Content = %v, want %v", msg.Content, content)
-	}
-	if len(msg.Images) != 0 {
-		t.Errorf("Message.Images should be nil or empty, got %v", msg.Images)
-	}
-	if len(msg.Audios) != 0 {
-		t.Errorf("Message.Audios should be nil or empty, got %v", msg.Audios)
-	}
+	assert.Equal(t, "user", msg.Role)
+	assert.Equal(t, content, msg.Content)
+	assert.Nil(t, msg.Images)
+	assert.Nil(t, msg.Audios)
 }
 
 func TestMessageWithImages(t *testing.T) {
@@ -87,20 +80,13 @@ func TestMessageWithImages(t *testing.T) {
 		Images:  images,
 	}
 
-	if len(msg.Images) != 3 {
-		t.Errorf("Message.Images length = %d, want %d", len(msg.Images), 3)
-	}
+	// Verify the number of images
+	assert.Len(t, msg.Images, 3)
 
 	// Verify each image is correctly stored
-	if msg.Images[0].URL != "https://example.com/image1.jpg" {
-		t.Errorf("Message.Images[0].URL = %v, want %v", msg.Images[0].URL, "https://example.com/image1.jpg")
-	}
-	if msg.Images[1].FilePath != "/path/to/image2.png" {
-		t.Errorf("Message.Images[1].FilePath = %v, want %v", msg.Images[1].FilePath, "/path/to/image2.png")
-	}
-	if msg.Images[2].Base64 != "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" {
-		t.Errorf("Message.Images[2].Base64 incorrect")
-	}
+	assert.Equal(t, "https://example.com/image1.jpg", msg.Images[0].URL)
+	assert.Equal(t, "/path/to/image2.png", msg.Images[1].FilePath)
+	assert.Equal(t, "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", msg.Images[2].Base64)
 }
 
 func TestMessageWithAudio(t *testing.T) {
@@ -122,20 +108,13 @@ func TestMessageWithAudio(t *testing.T) {
 		Audios:  audios,
 	}
 
-	if len(msg.Audios) != 3 {
-		t.Errorf("Message.Audios length = %d, want %d", len(msg.Audios), 3)
-	}
+	// Verify the number of audio clips
+	assert.Len(t, msg.Audios, 3)
 
 	// Verify each audio is correctly stored
-	if msg.Audios[0].URL != "https://example.com/audio1.mp3" {
-		t.Errorf("Message.Audios[0].URL = %v, want %v", msg.Audios[0].URL, "https://example.com/audio1.mp3")
-	}
-	if msg.Audios[1].FilePath != "/path/to/audio2.wav" {
-		t.Errorf("Message.Audios[1].FilePath = %v, want %v", msg.Audios[1].FilePath, "/path/to/audio2.wav")
-	}
-	if msg.Audios[2].Base64 != "UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" {
-		t.Errorf("Message.Audios[2].Base64 incorrect")
-	}
+	assert.Equal(t, "https://example.com/audio1.mp3", msg.Audios[0].URL)
+	assert.Equal(t, "/path/to/audio2.wav", msg.Audios[1].FilePath)
+	assert.Equal(t, "UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=", msg.Audios[2].Base64)
 }
 
 func TestMessageWithImagesAndAudio(t *testing.T) {
@@ -158,21 +137,14 @@ func TestMessageWithImagesAndAudio(t *testing.T) {
 		Audios:  audios,
 	}
 
-	if len(msg.Images) != 1 {
-		t.Errorf("Message.Images length = %d, want %d", len(msg.Images), 1)
-	}
+	assert.NotNil(t, msg.Images)
+	assert.NotNil(t, msg.Audios)
 
-	if len(msg.Audios) != 1 {
-		t.Errorf("Message.Audios length = %d, want %d", len(msg.Audios), 1)
-	}
+	assert.Len(t, msg.Images, 1)
+	assert.Len(t, msg.Audios, 1)
 
-	if msg.Images[0].URL != "https://example.com/image.jpg" {
-		t.Errorf("Message.Images[0].URL = %v, want %v", msg.Images[0].URL, "https://example.com/image.jpg")
-	}
-
-	if msg.Audios[0].URL != "https://example.com/audio.mp3" {
-		t.Errorf("Message.Audios[0].URL = %v, want %v", msg.Audios[0].URL, "https://example.com/audio.mp3")
-	}
+	assert.Equal(t, "https://example.com/image.jpg", msg.Images[0].URL)
+	assert.Equal(t, "https://example.com/audio.mp3", msg.Audios[0].URL)
 }
 
 func TestMessageWithEmptyArrays(t *testing.T) {
@@ -218,12 +190,11 @@ func TestMessageWithEmptyArrays(t *testing.T) {
 			}
 
 			if tt.expectEmpty {
-				if len(msg.Images) != 0 {
-					t.Errorf("Expected empty Images array, got %v", msg.Images)
-				}
-				if len(msg.Audios) != 0 {
-					t.Errorf("Expected empty Audios array, got %v", msg.Audios)
-				}
+				assert.Len(t, msg.Images, 0)
+				assert.Len(t, msg.Audios, 0)
+			} else {
+				assert.NotNil(t, msg.Images)
+				assert.NotNil(t, msg.Audios)
 			}
 		})
 	}

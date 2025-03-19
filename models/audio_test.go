@@ -8,13 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAudio_GetType(t *testing.T) {
 	audio := &Audio{}
-	if got := audio.GetType(); got != "audio" {
-		t.Errorf("Audio.GetType() = %v, want %v", got, "audio")
-	}
+	got := audio.GetType()
+	assert.Equal(t, "audio", got)
 }
 
 func TestAudio_Content_Base64(t *testing.T) {
@@ -25,13 +26,8 @@ func TestAudio_Content_Base64(t *testing.T) {
 	}
 
 	got, err := audio.Content()
-	if err != nil {
-		t.Errorf("Audio.Content() error = %v, want nil", err)
-		return
-	}
-	if got != testBase64 {
-		t.Errorf("Audio.Content() = %v, want %v", got, testBase64)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, testBase64, got)
 }
 
 func TestAudio_Content_FilePath(t *testing.T) {
@@ -43,22 +39,16 @@ func TestAudio_Content_FilePath(t *testing.T) {
 	expectedBase64 := base64.StdEncoding.EncodeToString(testContent)
 
 	// Write test content to the file
-	if err := os.WriteFile(tempFile, testContent, 0666); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	err := os.WriteFile(tempFile, testContent, 0666)
+	assert.NoError(t, err)
 
 	audio := &Audio{
 		FilePath: tempFile,
 	}
 
 	got, err := audio.Content()
-	if err != nil {
-		t.Errorf("Audio.Content() error = %v, want nil", err)
-		return
-	}
-	if got != expectedBase64 {
-		t.Errorf("Audio.Content() = %v, want %v", got, expectedBase64)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedBase64, got)
 }
 
 func TestAudio_Content_URL(t *testing.T) {
@@ -77,13 +67,8 @@ func TestAudio_Content_URL(t *testing.T) {
 	}
 
 	got, err := audio.Content()
-	if err != nil {
-		t.Errorf("Audio.Content() error = %v, want nil", err)
-		return
-	}
-	if got != expectedBase64 {
-		t.Errorf("Audio.Content() = %v, want %v", got, expectedBase64)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedBase64, got)
 }
 
 func TestAudio_Content_ErrorCases(t *testing.T) {
@@ -116,9 +101,10 @@ func TestAudio_Content_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := tt.audio.Content()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Audio.Content() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -144,7 +130,5 @@ func TestAudio_Content_BadResponse(t *testing.T) {
 	}
 
 	_, err := audio.Content()
-	if err == nil {
-		t.Error("Audio.Content() expected error for bad response, got nil")
-	}
+	assert.Error(t, err, "Audio.Content() expected error for bad response, got nil")
 }
