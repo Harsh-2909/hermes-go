@@ -37,6 +37,31 @@ func (m *MockModel) ChatCompletionStream(ctx context.Context, messages []models.
 	return ch, nil
 }
 
+// MockTool is a simple implementation of the Tool interface for testing
+func createMockTool(name string) tools.Tool {
+	return tools.Tool{
+		Name:        name,
+		Description: "Test tool " + name,
+		Parameters:  map[string]interface{}{"param": "test"},
+		Execute: func(ctx context.Context, args string) (string, error) {
+			return "Executed " + name, nil
+		},
+	}
+}
+
+// MockToolKit is a simple implementation of the ToolKit interface for testing
+type MockToolKit struct {
+	ToolNames []string
+}
+
+func (tk *MockToolKit) Tools() []tools.Tool {
+	var toolList []tools.Tool
+	for _, name := range tk.ToolNames {
+		toolList = append(toolList, createMockTool(name))
+	}
+	return toolList
+}
+
 func TestAgentInit(t *testing.T) {
 	// Test panic on nil Model
 	defer func() {
@@ -50,9 +75,8 @@ func TestAgentInit(t *testing.T) {
 	// Test successful initialization
 	agent = Agent{Model: &MockModel{}, Description: "Test agent"}
 	agent.Init()
-	if len(agent.Messages) != 1 || agent.Messages[0].Role != "system" {
-		t.Errorf("Expected system message in Messages after Init")
-	}
+	assert.Len(t, agent.Messages, 1, "Expected 1 system message in Messages after Init")
+	assert.Equal(t, "system", agent.Messages[0].Role, "Expected message of role `system` in Messages after Init")
 }
 
 func TestGetSystemMessage(t *testing.T) {
@@ -66,9 +90,8 @@ func TestGetSystemMessage(t *testing.T) {
 	agent.Init()
 	msg := agent.getSystemMessage()
 	expected := "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n<additional_information>\n- Use markdown to format your answers.\n</additional_information>\n\n"
-	if msg.Role != "system" || msg.Content != expected {
-		t.Errorf("Expected system message '%s', got '%s'", expected, msg.Content)
-	}
+	assert.Equal(t, "system", msg.Role, "Expected message of role `system`")
+	assert.Equal(t, expected, msg.Content, "Expected predefined system message")
 }
 
 func TestAddMessage(t *testing.T) {
@@ -131,31 +154,6 @@ func TestRunStream(t *testing.T) {
 	if count != 2 { // chunk + end
 		t.Errorf("Expected 2 events, got %d", count)
 	}
-}
-
-// MockTool is a simple implementation of the Tool interface for testing
-func createMockTool(name string) tools.Tool {
-	return tools.Tool{
-		Name:        name,
-		Description: "Test tool " + name,
-		Parameters:  map[string]interface{}{"param": "test"},
-		Execute: func(ctx context.Context, args string) (string, error) {
-			return "Executed " + name, nil
-		},
-	}
-}
-
-// MockToolKit is a simple implementation of the ToolKit interface for testing
-type MockToolKit struct {
-	ToolNames []string
-}
-
-func (tk *MockToolKit) Tools() []tools.Tool {
-	var toolList []tools.Tool
-	for _, name := range tk.ToolNames {
-		toolList = append(toolList, createMockTool(name))
-	}
-	return toolList
 }
 
 func TestProcessTools(t *testing.T) {
@@ -314,18 +312,7 @@ func TestAddToolToModel(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a custom mock model to verify SetTools is called correctly
-			// mockModel := &struct {
-			// 	MockModel
-			// 	toolsSet []tools.Tool
-			// }{}
 			mockModel := &MockModel{}
-
-			// Override SetTools to track which tools were set
-			// mockModel.SetTools = func(tools []tools.Tool) {
-			// 	mockModel.toolsSet = tools
-			// }
-
 			agent := Agent{
 				Model: mockModel,
 				Tools: tc.tools,
