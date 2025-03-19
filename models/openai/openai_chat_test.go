@@ -11,6 +11,7 @@ import (
 
 	"github.com/Harsh-2909/hermes-go/models"
 	"github.com/sashabaranov/go-openai"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestOpenAIChatInit tests the initialization of the OpenAIChat struct.
@@ -72,23 +73,23 @@ func TestConvertMessageToOpenAIFormat(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 		{Role: "assistant", Content: "Hi there"},
 		{Role: "user", Content: "Describe this image", Images: []*models.Image{{URL: "http://example.com/image.png"}}},
+		{Role: "user", Content: "Describe this image", Audios: []*models.Audio{{URL: "http://example.com/audio.wav"}}},
 	}
 	openaiMessages, err := convertMessageToOpenAIFormat(messages)
-	if err != nil {
-		t.Fatalf("Error converting messages: %v", err)
-	}
-	if len(openaiMessages) != 3 {
-		t.Fatalf("Expected 3 messages, got %d", len(openaiMessages))
-	}
-	if openaiMessages[0].Role != "user" || openaiMessages[0].Content != "Hello" {
-		t.Errorf("Unexpected message[0]: %+v", openaiMessages[0])
-	}
-	if openaiMessages[1].Role != "assistant" || openaiMessages[1].Content != "Hi there" {
-		t.Errorf("Unexpected message[1]: %+v", openaiMessages[1])
-	}
-	if openaiMessages[2].Role != "user" || len(openaiMessages[2].MultiContent) != 2 {
-		t.Fatalf("Unexpected message[2]: %+v", openaiMessages[2])
-	}
+	assert.NoError(t, err)
+	assert.Len(t, openaiMessages, 4)
+
+	assert.Equal(t, "user", openaiMessages[0].Role)
+	assert.Equal(t, "Hello", openaiMessages[0].Content)
+
+	assert.Equal(t, "assistant", openaiMessages[1].Role)
+	assert.Equal(t, "Hi there", openaiMessages[1].Content)
+
+	assert.Equal(t, "user", openaiMessages[2].Role)
+	assert.Len(t, openaiMessages[2].MultiContent, 2)
+
+	assert.Equal(t, "user", openaiMessages[3].Role)
+	assert.Len(t, openaiMessages[3].MultiContent, 2)
 }
 
 // TestChatCompletion tests the synchronous ChatCompletion method with a mocked HTTP response.
@@ -148,23 +149,14 @@ func TestChatCompletion(t *testing.T) {
 		{Role: "user", Content: "Hi there"},
 	}
 	resp, err := model.ChatCompletion(ctx, messages)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Validate response
-	if resp.Event != "complete" {
-		t.Errorf("Expected Event 'complete', got '%s'", resp.Event)
-	}
-	if resp.Data != "Hello, world!" {
-		t.Errorf("Expected Data 'Hello, world!', got '%s'", resp.Data)
-	}
-	if resp.Usage == nil || resp.Usage.TotalTokens != 15 {
-		t.Errorf("Expected Usage with TotalTokens 15, got %+v", resp.Usage)
-	}
-	if resp.CreatedAt.IsZero() {
-		t.Errorf("Expected non-zero CreatedAt")
-	}
+	assert.Equal(t, "complete", resp.Event)
+	assert.Equal(t, "Hello, world!", resp.Data)
+	assert.NotNil(t, resp.Usage)
+	assert.Equal(t, 15, resp.Usage.TotalTokens)
+	assert.False(t, resp.CreatedAt.IsZero())
 }
 
 // TestChatCompletionStream tests the streaming ChatCompletionStream method with a mocked SSE response.
@@ -230,9 +222,7 @@ func TestChatCompletionStream(t *testing.T) {
 		{Role: "user", Content: "Stream me"},
 	}
 	ch, err := model.ChatCompletionStream(ctx, messages)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Consume and validate the stream
 	expectedEvents := []string{"chunk", "chunk", "end"}
@@ -243,20 +233,12 @@ func TestChatCompletionStream(t *testing.T) {
 			t.Errorf("Received more events than expected")
 			break
 		}
-		if resp.Event != expectedEvents[i] {
-			t.Errorf("Expected event '%s', got '%s'", expectedEvents[i], resp.Event)
-		}
-		if resp.Data != expectedData[i] {
-			t.Errorf("Expected data '%s', got '%s'", expectedData[i], resp.Data)
-		}
-		if resp.CreatedAt.IsZero() {
-			t.Errorf("Expected non-zero CreatedAt for event %d", i)
-		}
+		assert.Equal(t, expectedEvents[i], resp.Event)
+		assert.Equal(t, expectedData[i], resp.Data)
+		assert.False(t, resp.CreatedAt.IsZero())
 		i++
 	}
-	if i != len(expectedEvents) {
-		t.Errorf("Expected %d events, got %d", len(expectedEvents), i)
-	}
+	assert.Len(t, expectedEvents, i)
 }
 
 // marshalSSE helper function to encode SSE data for the mock server.
