@@ -24,9 +24,9 @@ func (m *MockModel) ChatCompletion(ctx context.Context, messages []models.Messag
 func (m *MockModel) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
 	ch := make(chan models.ModelResponse)
 	go func() {
+		defer close(ch)
 		ch <- models.ModelResponse{Event: "chunk", Data: "Mock chunk", CreatedAt: time.Now()}
 		ch <- models.ModelResponse{Event: "end", CreatedAt: time.Now()}
-		close(ch)
 	}()
 	return ch, nil
 }

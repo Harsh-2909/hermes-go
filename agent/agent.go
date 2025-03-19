@@ -323,9 +323,10 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 					Event:     "end",
 					CreatedAt: time.Now(),
 				}
+				break
 			}
 		}
+		utils.Logger.Debug("Agent RunStream End")
 	}()
-	utils.Logger.Debug("Agent RunStream End")
 	return ch, nil
 }
