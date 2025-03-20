@@ -329,14 +329,6 @@ func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []mo
 				CreatedAt: time.Now(),
 			}
 		}
-		// else {
-		// 	// TODO: Do I even need this complete event with the whole data.
-		// 	ch <- models.ModelResponse{
-		// 		Event:     "complete",
-		// 		Data:      content,
-		// 		CreatedAt: time.Now(),
-		// 	}
-		// }
 		// TODO: Find a way to send usage data in the final event.
 		ch <- models.ModelResponse{
 			Event:     "end",

@@ -80,18 +80,69 @@ func TestAgentInit(t *testing.T) {
 }
 
 func TestGetSystemMessage(t *testing.T) {
-	agent := Agent{
-		Model:       &MockModel{},
-		Description: "Test agent",
-		Goal:        "Test goal",
-		Role:        "Test role",
-		Markdown:    true,
+	tests := []struct {
+		name         string
+		description  string
+		goal         string
+		role         string
+		markdown     bool
+		instructions interface{}
+		expected     string
+	}{
+		{
+			name:         "All fields with markdown",
+			description:  "Test agent",
+			goal:         "Test goal",
+			role:         "Test role",
+			markdown:     true,
+			instructions: nil,
+			expected:     "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n<additional_information>\n- Use markdown to format your answers.\n</additional_information>\n\n",
+		},
+		{
+			name:         "All fields without markdown",
+			description:  "Test agent",
+			goal:         "Test goal",
+			role:         "Test role",
+			markdown:     false,
+			instructions: nil,
+			expected:     "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n",
+		},
+		{
+			name:         "With string instructions",
+			description:  "Test agent",
+			goal:         "Test goal",
+			role:         "Test role",
+			markdown:     false,
+			instructions: "Remember to be concise.",
+			expected:     "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n<instructions>\nRemember to be concise.\n</instructions>\n\n",
+		},
+		{
+			name:         "With slice instructions and markdown",
+			description:  "Agent",
+			goal:         "Goal A",
+			role:         "Role A",
+			markdown:     true,
+			instructions: []string{"Step 1", "Step 2"},
+			expected:     "Agent\n\n<your_goal>\nGoal A\n</your_goal>\n\n<your_role>\nRole A\n</your_role>\n\n<instructions>\n- Step 1\n- Step 2\n</instructions>\n\n<additional_information>\n- Use markdown to format your answers.\n</additional_information>\n\n",
+		},
 	}
-	agent.Init()
-	msg := agent.getSystemMessage()
-	expected := "Test agent\n\n<your_goal>\nTest goal\n</your_goal>\n\n<your_role>\nTest role\n</your_role>\n\n<additional_information>\n- Use markdown to format your answers.\n</additional_information>\n\n"
-	assert.Equal(t, "system", msg.Role, "Expected message of role `system`")
-	assert.Equal(t, expected, msg.Content, "Expected predefined system message")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := Agent{
+				Model:        &MockModel{},
+				Description:  tc.description,
+				Goal:         tc.goal,
+				Role:         tc.role,
+				Markdown:     tc.markdown,
+				Instructions: tc.instructions,
+			}
+			agent.Init()
+			msg := agent.getSystemMessage()
+			assert.Equal(t, "system", msg.Role, "Expected message of role `system`")
+			assert.Equal(t, tc.expected, msg.Content, "Expected predefined system message")
+		})
+	}
 }
 
 func TestAddMessage(t *testing.T) {

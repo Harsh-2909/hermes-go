@@ -19,11 +19,12 @@ type Agent struct {
 
 	// Settings for building the default system message
 
-	SystemMessage string // Custom system message; if set, overrides other settings
-	Description   string // Description of the agent, prepended to the default system message
-	Goal          string // Task goal, included in the system message within <your_goal> tags
-	Role          string // Agent's role, included in the system message within <your_role> tags
-	Markdown      bool   // If true, instructs the model to format responses in Markdown
+	SystemMessage string      // Custom system message; if set, overrides other settings
+	Description   string      // Description of the agent, prepended to the default system message
+	Goal          string      // Task goal, included in the system message within <your_goal> tags
+	Instructions  interface{} // Instructions for the user, included in the system message within <instructions> tags. Can be a string or []string
+	Role          string      // Agent's role, included in the system message within <your_role> tags
+	Markdown      bool        // If true, instructs the model to format responses in Markdown
 
 	// Agent Tools
 
@@ -117,20 +118,44 @@ func (agent *Agent) getSystemMessage() models.Message {
 	if agent.SystemMessage != "" {
 		systemMessageContent = agent.SystemMessage
 	} else {
+		// Build the default system message for the Agent.
+		// First add the Agent description if provided
 		if agent.Description != "" {
 			systemMessageContent += agent.Description + "\n\n"
 		}
+		// Then add the Agent goal if provided
 		if agent.Goal != "" {
 			systemMessageContent += fmt.Sprintf("<your_goal>\n%s\n</your_goal>\n\n", agent.Goal)
 		}
+		// Then add the Agent role if provided
 		if agent.Role != "" {
 			systemMessageContent += fmt.Sprintf("<your_role>\n%s\n</your_role>\n\n", agent.Role)
+		}
+		// Then add instructions for the Agent
+		if agent.Instructions != nil {
+			switch instr := agent.Instructions.(type) {
+			case string:
+				if instr != "" { // Only include if non-empty
+					systemMessageContent += fmt.Sprintf("<instructions>\n%s\n</instructions>\n\n", instr)
+				}
+			case []string:
+				if len(instr) > 0 {
+					systemMessageContent += "<instructions>"
+					for _, instruction := range instr {
+						systemMessageContent += fmt.Sprintf("\n- %s", instruction)
+					}
+					systemMessageContent += "\n</instructions>\n\n"
+				}
+			default:
+				utils.Logger.Warn("Unsupported type for Instructions; expected string or []string")
+			}
 		}
 	}
 	var additionalInformation []string
 	if agent.Markdown {
 		additionalInformation = append(additionalInformation, "Use markdown to format your answers.")
 	}
+	// Add additional information if provided
 	if len(additionalInformation) > 0 {
 		systemMessageContent += "<additional_information>"
 		for _, instruction := range additionalInformation {
