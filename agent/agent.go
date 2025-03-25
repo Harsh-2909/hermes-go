@@ -108,6 +108,7 @@ func (agent *Agent) addToolToModel() {
 		utils.Logger.Debug("Tool added to model", "tool_name", tool.Name)
 	}
 	agent.Model.SetTools(processedTools)
+	utils.Logger.Debug("Tools added to model")
 }
 
 // getSystemMessage constructs the initial system message based on the agent's settings.
