@@ -12,6 +12,7 @@ type CalculatorTools struct {
 	EnableSubtract bool // EnableSubtract enables the Subtract tool
 	EnableMultiply bool // EnableMultiply enables the Multiply tool
 	EnableDivide   bool // EnableDivide enables the Divide tool
+	EnableModulus  bool // EnableModulus enables the Modulus tool
 
 	// EnableAll enables all tools in the toolkit.
 	EnableAll bool
@@ -51,6 +52,14 @@ func (c *CalculatorTools) Tools() []Tool {
 			utils.Logger.Error("Failed to create Divide tool", "error", err)
 		}
 	}
+	if c.EnableModulus || c.EnableAll {
+		modulusTool, err := CreateToolFromMethod(c, "Modulus")
+		if err == nil {
+			tools = append(tools, modulusTool)
+		} else {
+			utils.Logger.Error("Failed to create Modulus tool", "error", err)
+		}
+	}
 	return tools
 }
 
@@ -88,4 +97,16 @@ func (c *CalculatorTools) Divide(ctx context.Context, a, b float64) float64 {
 		return 0
 	}
 	return a / b
+}
+
+// Modulus two numbers and return the result.
+// @param a: The first number
+// @param b: The second number
+// @return The result of modulus a by b. If b is 0, return 0.
+func (c *CalculatorTools) Modulus(ctx context.Context, a, b int) int {
+	if b == 0 {
+		utils.Logger.Error("Attempt to modulus by zero")
+		return 0
+	}
+	return a % b
 }
