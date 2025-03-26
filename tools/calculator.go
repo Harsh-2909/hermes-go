@@ -18,6 +18,9 @@ type CalculatorTools struct {
 	EnableAll bool
 }
 
+// Tools returns the list of tools in the toolkit.
+// It sets up the tools based on the configuration of the toolkit.
+// @return The list of tools in the toolkit
 func (c *CalculatorTools) Tools() []Tool {
 	tools := make([]Tool, 0)
 	if c.EnableAdd || c.EnableAll {
