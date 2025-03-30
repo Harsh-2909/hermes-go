@@ -52,3 +52,18 @@ func (img *Image) Content() (string, error) {
 	}
 	return "", fmt.Errorf("no image data provided")
 }
+
+// GetMediaType returns the media type (e.g., image/jpeg, image/png) of the image based on base64 content.
+func (img *Image) GetMediaType() (string, error) {
+	base64Content, err := img.Content()
+	if err != nil {
+		return "", err
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Content)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64 content: %w", err)
+	}
+	// http.DetectContentType reads up to 512 bytes to determine the content type.
+	mediaType := http.DetectContentType(data)
+	return mediaType, nil
+}
