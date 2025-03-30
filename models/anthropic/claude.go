@@ -52,7 +52,6 @@ func (model *Claude) Init() {
 	}
 
 	model.client = anthropic.NewClient(option.WithAPIKey(model.ApiKey))
-
 	model.isInit = true
 }
 
@@ -63,31 +62,19 @@ func (model *Claude) SetTools(tools []tools.Tool) {
 
 // formatMessages converts framework Messages to Anthropic's message format.
 // It handles text, images, tool calls, and tool results, grouping tool results into subsequent user messages.
-// TODO: Handle tool call in next iteration
 func formatMessages(messages []models.Message) ([]anthropic.MessageParam, string, error) {
 	var anthropicMessages []anthropic.MessageParam
-	// var systemMessages []anthropic.TextBlockParam
 	var systemMessages []string
-	// var pendingToolResults []anthropic.MessageContent
 
 	for _, msg := range messages {
 		switch msg.Role {
 		case "system":
 			// System messages are added to the systemMessages slice
 			if msg.Content != "" {
-				// systemMessages = append(systemMessages, anthropic.TextBlockParam{
-				// 	Text: msg.Content,
-				// })
 				systemMessages = append(systemMessages, msg.Content)
 			}
 		case "user":
 			content := []anthropic.ContentBlockParamUnion{}
-
-			// Add any pending tool results from previous tool calls
-			// if len(pendingToolResults) > 0 {
-			// 	content = append(content, pendingToolResults...)
-			// 	pendingToolResults = nil
-			// }
 
 			// Add text content if present
 			if msg.Content != "" {
@@ -142,34 +129,28 @@ func formatMessages(messages []models.Message) ([]anthropic.MessageParam, string
 					OfRequestTextBlock: &anthropic.TextBlockParam{Text: msg.Content},
 				})
 			}
+
 			// Add the tool calls initiated by the model to the message history
-			// TODO: Handle tool call once rest of the model features are implemented.
-			// for _, tc := range msg.ToolCalls {
-			// 	inputJSON, err := utils.AnyToJSON(tc.Arguments)
-			// 	if err != nil {
-			// 		return nil, fmt.Errorf("failed to convert tool arguments to JSON: %w", err)
-			// 	}
-			// 	content = append(content, anthropic.MessageContent{
-			// 		Type:  "tool_use",
-			// 		ID:    tc.ID,
-			// 		Name:  tc.Name,
-			// 		Input: json.RawMessage(inputJSON),
-			// 	})
-			// The line below is the tool result block, which is not needed in the assistant message
-			// Check this: ToolUseBlockParam
-			// 	content = append(content, anthropic.NewToolResultBlock(tc.ID, tc.Name, json.RawMessage(inputJSON)))
-			// }
+			for _, tc := range msg.ToolCalls {
+				content = append(content, anthropic.ContentBlockParamUnion{
+					OfRequestToolUseBlock: &anthropic.ToolUseBlockParam{
+						ID:    tc.ID,
+						Name:  tc.Name,
+						Input: tc.Arguments,
+					},
+				})
+			}
 			anthropicMessages = append(anthropicMessages, anthropic.MessageParam{
 				Role:    anthropic.MessageParamRoleAssistant,
 				Content: content,
 			})
-		// case "tool":
-		// 	// Store tool result to include in the next user message
-		// 	pendingToolResults = append(pendingToolResults, anthropic.MessageContent{
-		// 		Type:      "tool_result",
-		// 		ToolUseID: msg.ToolCallID,
-		// 		Content:   &msg.Content,
-		// 	})
+		case "tool":
+			var content []anthropic.ContentBlockParamUnion
+			content = append(content, anthropic.NewToolResultBlock(msg.ToolCallID, msg.Content, false))
+			anthropicMessages = append(anthropicMessages, anthropic.MessageParam{
+				Role:    anthropic.MessageParamRoleUser,
+				Content: content,
+			})
 		default:
 			utils.Logger.Error("unsupported message role", "role", msg.Role)
 		}
@@ -185,8 +166,9 @@ func (model *Claude) getChatCompletionRequest(messages []anthropic.MessageParam,
 		tool := anthropic.ToolParam{
 			Name:        tool.Name,
 			Description: anthropic.String(tool.Description),
-			// TODO: Add input schema
-			// InputSchema: json.RawMessage(parametersJSON),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: tool.Parameters["properties"],
+			},
 		}
 		anthropicTools = append(anthropicTools, anthropic.ToolUnionParam{OfTool: &tool})
 	}
@@ -274,7 +256,6 @@ func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models
 	}
 
 	stream := model.client.Messages.NewStreaming(ctx, model.getChatCompletionRequest(anthropicMessages, systemMessage))
-
 	ch := make(chan models.ModelResponse)
 	go func() {
 		defer close(ch)
@@ -368,7 +349,6 @@ func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models
 			}
 			ch <- models.ModelResponse{
 				Event:     "tool_call",
-				Data:      content,
 				ToolCalls: finalToolCalls,
 				CreatedAt: time.Now(),
 			}
