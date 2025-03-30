@@ -31,7 +31,8 @@ func (a *Audio) Content() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to read audio file: %w", err)
 		}
-		return base64.StdEncoding.EncodeToString(data), nil
+		a.Base64 = base64.StdEncoding.EncodeToString(data)
+		return a.Base64, nil
 	}
 	if a.URL != "" {
 		resp, err := http.Get(a.URL)
@@ -43,7 +44,8 @@ func (a *Audio) Content() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to read audio data from URL: %w", err)
 		}
-		return base64.StdEncoding.EncodeToString(data), nil
+		a.Base64 = base64.StdEncoding.EncodeToString(data)
+		return a.Base64, nil
 	}
 	return "", fmt.Errorf("no audio data provided")
 }

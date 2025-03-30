@@ -33,7 +33,8 @@ func (img *Image) Content() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to read file: %w", err)
 		}
-		return base64.StdEncoding.EncodeToString(data), nil
+		img.Base64 = base64.StdEncoding.EncodeToString(data)
+		return img.Base64, nil
 	}
 	// If a URL is provided, fetch and encode the image
 	if img.URL != "" {
@@ -46,7 +47,8 @@ func (img *Image) Content() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to read image data: %w", err)
 		}
-		return base64.StdEncoding.EncodeToString(data), nil
+		img.Base64 = base64.StdEncoding.EncodeToString(data)
+		return img.Base64, nil
 	}
 	return "", fmt.Errorf("no image data provided")
 }
