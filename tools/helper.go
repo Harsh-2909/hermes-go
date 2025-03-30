@@ -14,6 +14,11 @@ import (
 )
 
 // CreateToolFromMethod creates a Tool from a method of a toolkit instance.
+//
+// TODO: Changes to be made:
+// - Refactor this function to use go/types package instead of go/ast.
+// - Make this more readable and maintainable.
+// - Add support for more types.
 func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) {
 	// Get the method via reflection
 	method, ok := reflect.TypeOf(toolkit).MethodByName(methodName)

@@ -89,7 +89,7 @@ func (model *OpenAIChat) SetTools(tools []tools.Tool) {
 }
 
 // convertMessageToOpenAIFormat converts a slice of Message instances to OpenAI's ChatCompletionMessage format.
-// It handles text and image content, converting images to base64-encoded URLs.
+// It handles text and image content, tool calls, and tool results converting images to base64-encoded URLs.
 func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompletionMessage, error) {
 	var openaiMessages []openai.ChatCompletionMessage
 	var chatMessage openai.ChatCompletionMessage
@@ -126,6 +126,7 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 			}
 			for _, img := range msg.Images {
 				base64Content, err := img.Content()
+				// TODO: Why return back if only one image fails? Change this part with tests
 				if err != nil {
 					return nil, fmt.Errorf("failed to get image content: %w", err)
 				}
@@ -138,6 +139,7 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 			}
 			for _, audio := range msg.Audios {
 				base64Content, err := audio.Content()
+				// TODO: Why return back if only one audio fails? Change this part with tests
 				if err != nil {
 					return nil, fmt.Errorf("failed to get audio content: %w", err)
 				}

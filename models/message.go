@@ -6,8 +6,9 @@ import (
 )
 
 // Message represents a single entry in a conversation with an AI model.
+// TODO: Create constants for roles
 type Message struct {
-	Role       string           // Role of the sender: "system" (instructions), "user" (input), or "assistant" (response)
+	Role       string           // Role of the sender: "system" (instructions), "user" (input), "assistant" (response) or "tool" (tool response)
 	Content    string           // Text content of the message
 	ToolCallID string           // Unique ID for the tool call (used in OpenAI's API)
 	ToolCalls  []tools.ToolCall // Tool calls to execute, this field stores the request with results in the conversion history.
