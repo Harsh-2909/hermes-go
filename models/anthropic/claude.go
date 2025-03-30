@@ -221,7 +221,7 @@ func (model *Claude) ChatCompletion(ctx context.Context, messages []models.Messa
 
 	if len(resp.Content) == 0 {
 		utils.Logger.Error("No response from model")
-		return models.ModelResponse{}, fmt.Errorf("No response from model")
+		return models.ModelResponse{}, fmt.Errorf("no response from model")
 	}
 
 	modelResp := models.ModelResponse{
@@ -244,7 +244,8 @@ func (model *Claude) ChatCompletion(ctx context.Context, messages []models.Messa
 	case anthropic.RedactedThinkingBlock:
 		utils.Logger.Warn("redacted thinking block encountered", "data", variant.Data)
 	default:
-		fmt.Errorf("no variant present")
+		utils.Logger.Error("unknown block type", "block", variant)
+		return models.ModelResponse{}, fmt.Errorf("unknown block type: %T", variant)
 	}
 
 	if resp.StopReason == "tool_use" {
@@ -279,8 +280,8 @@ func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models
 		defer close(ch)
 		defer stream.Close()
 
-		// content := ""
-		// var toolCalls []tools.ToolCall
+		content := ""
+		toolCalls := make(map[int]*tools.ToolCall)
 		message := anthropic.Message{}
 
 		for stream.Next() {
@@ -295,51 +296,93 @@ func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models
 				return
 			}
 
-			// switch e := event.(type) {
-			// case *anthropic.EventContentBlockDelta:
-			// 	if e.Delta.Type == "text_delta" && e.Delta.Text != nil {
-			// 		content += *e.Delta.Text
-			// 		ch <- models.ModelResponse{
-			// 			Event:     "chunk",
-			// 			Data:      *e.Delta.Text,
-			// 			CreatedAt: time.Now(),
-			// 		}
-			// 	}
-			// case *anthropic.EventContentBlockStart:
-			// 	if e.ContentBlock.Type == "tool_use" {
-			// 		toolCalls = append(toolCalls, tools.ToolCall{
-			// 			ID:        e.ContentBlock.ID,
-			// 			Name:      e.ContentBlock.Name,
-			// 			Arguments: string(e.ContentBlock.Input),
-			// 		})
-			// 	}
-			// case *anthropic.EventMessageStop:
-			// 	if len(toolCalls) > 0 {
-			// 		ch <- models.ModelResponse{
-			// 			Event:     "tool_call",
-			// 			Data:      content,
-			// 			ToolCalls: toolCalls,
-			// 			CreatedAt: time.Now(),
-			// 		}
-			// 	}
-			// 	ch <- models.ModelResponse{
-			// 		Event:     "end",
-			// 		CreatedAt: time.Now(),
-			// 		Usage: &Usage{
-			// 			PromptTokens:     e.Message.Usage.InputTokens,
-			// 			CompletionTokens: e.Message.Usage.OutputTokens,
-			// 			TotalTokens:      e.Message.Usage.InputTokens + e.Message.Usage.OutputTokens,
-			// 		},
-			// 	}
-			// 	return
-			// case *anthropic.EventError:
-			// 	ch <- models.ModelResponse{
-			// 		Event:     "error",
-			// 		Data:      e.Error.Message,
-			// 		CreatedAt: time.Now(),
-			// 	}
-			// 	return
-			// }
+			// Check Anthropic docs on streaming:
+			// https://docs.anthropic.com/en/api/messages-streaming
+			switch variant := event.AsAny().(type) {
+			case anthropic.MessageStartEvent:
+			case anthropic.MessageDeltaEvent:
+			case anthropic.MessageStopEvent:
+				// This is the last event of the stream
+				// Break out of for loop, end event will be sent after leaving the loop
+				break
+
+			case anthropic.ContentBlockStartEvent:
+				switch block := variant.ContentBlock.AsAny().(type) {
+				case anthropic.TextBlock:
+					content += block.Text
+					ch <- models.ModelResponse{
+						Event:     "chunk",
+						Data:      block.Text,
+						CreatedAt: time.Now(),
+					}
+				case anthropic.ToolUseBlock:
+					toolCalls[int(variant.Index)] = &tools.ToolCall{
+						ID:   block.ID,
+						Name: block.Name,
+					}
+				case anthropic.ThinkingBlock:
+				case anthropic.RedactedThinkingBlock:
+				default:
+					utils.Logger.Error("unknown content block type", "block", block)
+				}
+
+			case anthropic.ContentBlockDeltaEvent:
+				switch block := variant.Delta.AsAny().(type) {
+				case anthropic.TextDelta:
+					content += block.Text
+					ch <- models.ModelResponse{
+						Event:     "chunk",
+						Data:      block.Text,
+						CreatedAt: time.Now(),
+					}
+				case anthropic.InputJSONDelta:
+					if tc, exists := toolCalls[int(variant.Index)]; exists {
+						tc.Arguments += block.PartialJSON
+					}
+				case anthropic.CitationsDelta:
+				case anthropic.ThinkingDelta:
+				case anthropic.SignatureDelta:
+				default:
+					utils.Logger.Error("unknown content block type", "block", block)
+				}
+
+			case anthropic.ContentBlockStopEvent:
+			}
+		}
+
+		// Check for any errors in the stream
+		if stream.Err() != nil {
+			ch <- models.ModelResponse{
+				Event:     "error",
+				Data:      stream.Err().Error(),
+				CreatedAt: time.Now(),
+			}
+			return
+		}
+
+		// After streaming ends, check for tool calls
+		if len(toolCalls) > 0 {
+			var finalToolCalls []tools.ToolCall
+			for _, tc := range toolCalls {
+				finalToolCalls = append(finalToolCalls, *tc)
+			}
+			ch <- models.ModelResponse{
+				Event:     "tool_call",
+				Data:      content,
+				ToolCalls: finalToolCalls,
+				CreatedAt: time.Now(),
+			}
+		}
+
+		// Send the final message after tool calls
+		ch <- models.ModelResponse{
+			Event:     "end",
+			CreatedAt: time.Now(),
+			Usage: &models.Usage{
+				PromptTokens:     int(message.Usage.InputTokens),
+				CompletionTokens: int(message.Usage.OutputTokens),
+				TotalTokens:      int(message.Usage.InputTokens + message.Usage.OutputTokens),
+			},
 		}
 	}()
 

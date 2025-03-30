@@ -23,3 +23,6 @@ go.work.sum
 
 # env file
 .env
+
+# Personal notes for development
+aa_ref_01
