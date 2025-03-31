@@ -3,6 +3,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -132,11 +133,18 @@ func formatMessages(messages []models.Message) ([]anthropic.MessageParam, string
 
 			// Add the tool calls initiated by the model to the message history
 			for _, tc := range msg.ToolCalls {
+				// Anthropic expects the `Input` field to be a JSON data instead of json string.
+				// Thus, we need to unmarshal the `ToolCall.Arguments`
+				var inputJSON map[string]any
+				if err := json.Unmarshal([]byte(tc.Arguments), &inputJSON); err != nil {
+					utils.Logger.Error("failed to parse tool call arguments", "error", err)
+					continue
+				}
 				content = append(content, anthropic.ContentBlockParamUnion{
 					OfRequestToolUseBlock: &anthropic.ToolUseBlockParam{
 						ID:    tc.ID,
 						Name:  tc.Name,
-						Input: tc.Arguments,
+						Input: inputJSON,
 					},
 				})
 			}
@@ -194,6 +202,12 @@ func (model *Claude) getChatCompletionRequest(messages []anthropic.MessageParam,
 // ChatCompletion sends a synchronous chat request to Anthropic and returns the response.
 func (model *Claude) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	anthropicMessages, systemMessage, err := formatMessages(messages)
+	// DEBUG: Check messages going to Anthropic API
+	// fmt.Printf("\n\nClaude Messages:\n")
+	// for _, msg := range anthropicMessages {
+	// 	val, _ := msg.MarshalJSON()
+	// 	fmt.Printf("%s\n", string(val))
+	// }
 	if err != nil {
 		utils.Logger.Error("Failed to convert messages", "error", err)
 		return models.ModelResponse{}, fmt.Errorf("failed to convert messages: %w", err)
@@ -213,25 +227,27 @@ func (model *Claude) ChatCompletion(ctx context.Context, messages []models.Messa
 	modelResp := models.ModelResponse{
 		CreatedAt: time.Now(),
 	}
+	// fmt.Printf("\nMessage Received: %s\n", resp.RawJSON()) // DEBUG: Check messages received from Anthropic API
 
-	block := resp.Content[0]
-	switch variant := block.AsAny().(type) {
-	case anthropic.TextBlock:
-		modelResp.Data += variant.Text
-	case anthropic.ToolUseBlock:
-		modelResp.Event = "tool_call"
-		modelResp.ToolCalls = append(modelResp.ToolCalls, tools.ToolCall{
-			ID:        block.ID,
-			Name:      block.Name,
-			Arguments: string(block.Input),
-		})
-	case anthropic.ThinkingBlock:
-		utils.Logger.Warn("thinking block not supported yet", "thinking", variant.Thinking)
-	case anthropic.RedactedThinkingBlock:
-		utils.Logger.Warn("redacted thinking block encountered", "data", variant.Data)
-	default:
-		utils.Logger.Error("unknown block type", "block", variant)
-		return models.ModelResponse{}, fmt.Errorf("unknown block type: %T", variant)
+	for _, block := range resp.Content {
+		switch variant := block.AsAny().(type) {
+		case anthropic.TextBlock:
+			modelResp.Data += variant.Text
+		case anthropic.ToolUseBlock:
+			modelResp.Event = "tool_call"
+			modelResp.ToolCalls = append(modelResp.ToolCalls, tools.ToolCall{
+				ID:        block.ID,
+				Name:      block.Name,
+				Arguments: string(block.Input),
+			})
+		case anthropic.ThinkingBlock:
+			utils.Logger.Warn("thinking block not supported yet", "thinking", variant.Thinking)
+		case anthropic.RedactedThinkingBlock:
+			utils.Logger.Warn("redacted thinking block encountered", "data", variant.Data)
+		default:
+			utils.Logger.Error("unknown block type", "block", variant)
+			return models.ModelResponse{}, fmt.Errorf("unknown block type: %T", variant)
+		}
 	}
 
 	if resp.StopReason == "tool_use" {
@@ -254,6 +270,12 @@ func (model *Claude) ChatCompletion(ctx context.Context, messages []models.Messa
 // It emits "chunk" for content, "tool_call" for tool use, "end" for completion, or "error" for failures.
 func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
 	anthropicMessages, systemMessage, err := formatMessages(messages)
+	// DEBUG: Check messages going to Anthropic API
+	// fmt.Printf("\n\nClaude Messages:\n")
+	// for _, msg := range anthropicMessages {
+	// 	val, _ := msg.MarshalJSON()
+	// 	fmt.Printf("%s\n", string(val))
+	// }
 	if err != nil {
 		utils.Logger.Error("Failed to convert messages", "error", err)
 		return nil, fmt.Errorf("failed to convert messages: %w", err)
@@ -280,6 +302,7 @@ func (model *Claude) ChatCompletionStream(ctx context.Context, messages []models
 				}
 				return
 			}
+			// fmt.Printf("Event received: %s\n", event.RawJSON()) // DEBUG: Check messages received from Anthropic API
 
 			// Check Anthropic docs on streaming:
 			// https://docs.anthropic.com/en/api/messages-streaming
