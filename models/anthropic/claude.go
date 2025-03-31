@@ -178,11 +178,15 @@ func (model *Claude) getChatCompletionRequest(messages []anthropic.MessageParam,
 		MaxTokens:   int64(model.MaxTokens),
 		Temperature: anthropic.Float(float64(model.Temperature)),
 		TopP:        anthropic.Float(float64(model.TopP)),
-		System: []anthropic.TextBlockParam{
+		Messages:    messages,
+		Tools:       anthropicTools,
+	}
+
+	// Set system message only if provided
+	if systemMessage != "" {
+		chatCompletionRequest.System = []anthropic.TextBlockParam{
 			{Text: systemMessage},
-		},
-		Messages: messages,
-		Tools:    anthropicTools,
+		}
 	}
 	return chatCompletionRequest
 }
