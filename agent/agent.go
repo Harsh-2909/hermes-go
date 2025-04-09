@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
@@ -207,9 +206,6 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
 	}
 
-	runResponse := models.ModelResponse{}
-	var respData []string
-
 	for {
 		response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
 		if err != nil {
@@ -220,8 +216,8 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 			Role:    "assistant",
 			Content: response.Data,
 		}
-		respData = append(respData, response.Data) // Accumulate response data across iterations
 		if response.Event == "tool_call" {
+			// fmt.Printf("\n%+v\n", response)
 			assistantMessage.ToolCalls = response.ToolCalls
 			agent.Messages = append(agent.Messages, assistantMessage)
 
@@ -253,10 +249,7 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 		} else if response.Event == "complete" {
 			agent.Messages = append(agent.Messages, assistantMessage)
 			utils.Logger.Debug("Agent Run End")
-			runResponse.Event = "complete"
-			runResponse.CreatedAt = time.Now()
-			runResponse.Data = strings.Join(respData, "\n")
-			return runResponse, nil
+			return response, nil
 		} else {
 			return models.ModelResponse{}, fmt.Errorf("unexpected event type: %s", response.Event)
 		}
