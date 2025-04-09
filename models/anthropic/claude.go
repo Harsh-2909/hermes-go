@@ -25,9 +25,9 @@ type Claude struct {
 	MaxTokens   int     // Maximum tokens to generate (required by Anthropic)
 
 	// Internal fields
-	client anthropic.Client // Internal Anthropic API client
-	isInit bool             // Tracks initialization
-	tools  []tools.Tool     // List of tools for the model
+	client *anthropic.Client // Internal Anthropic API client
+	isInit bool              // Tracks initialization
+	tools  []tools.Tool      // List of tools for the model
 }
 
 // Init initializes the Claude instance, validating required fields and setting up the client.
@@ -52,7 +52,11 @@ func (model *Claude) Init() {
 		model.MaxTokens = 4096 // Anthropic requires this; default to a reasonable value
 	}
 
-	model.client = anthropic.NewClient(option.WithAPIKey(model.ApiKey))
+	if model.client == nil {
+		// Initialize the client with the provided API key
+		client := anthropic.NewClient(option.WithAPIKey(model.ApiKey))
+		model.client = &client
+	}
 	model.isInit = true
 }
 
