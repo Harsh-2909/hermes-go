@@ -19,7 +19,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Initialize the OpenAI model
+	// Initialize the model
 	model := &anthropic.Claude{
 		ApiKey:      os.Getenv("ANTHROPIC_API_KEY"),
 		Id:          "claude-3-5-haiku-latest",
