@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/glamour"
+	"github.com/pterm/pterm"
+
 	"github.com/Harsh-2909/hermes-go/models"
 	"github.com/Harsh-2909/hermes-go/tools"
 	"github.com/Harsh-2909/hermes-go/utils"
@@ -355,4 +358,122 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 		utils.Logger.Debug("Agent RunStream End")
 	}()
 	return ch, nil
+}
+
+// printState holds the current state for streaming display
+type printState struct {
+	isThinking bool
+	toolCalls  []string
+	response   string
+}
+
+// buildContent constructs the display content based on the state
+func buildContent(state printState, markdown bool) string {
+	var content string
+	if state.isThinking {
+		content += "Thinking...\n\n"
+	}
+	for _, tc := range state.toolCalls {
+		content += pterm.Yellow("Tool Call:") + " " + tc + "\n"
+	}
+	if state.response != "" {
+		content += "Response:\n"
+		if markdown {
+			content += renderMarkdown(state.response)
+		} else {
+			content += state.response
+		}
+	}
+	return content
+}
+
+// renderMarkdown renders text as markdown using glamour
+func renderMarkdown(text string) string {
+	renderer, _ := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
+	rendered, err := renderer.Render(text)
+	if err != nil {
+		return text // Fallback to plain text if rendering fails
+	}
+	return rendered
+}
+
+// PrintResponse prints the agent's response with rich formatting
+func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
+	state := printState{isThinking: true}
+	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
+	if err != nil {
+		pterm.Error.Println("Error:", err)
+		return err
+	}
+	defer area.Stop()
+	if !stream {
+		// Non streaming case
+		var finalResponse string
+		userResponse := utils.MessageBox(userMessage, true)
+		if showMessage {
+			area.Update(userResponse)
+		}
+		spinner, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).Start("Thinking...")
+		defer spinner.Stop()
+		response, err := agent.Run(ctx, userMessage, media...)
+		if err != nil {
+			pterm.Error.Println("Error:", err)
+			return err
+		}
+		agentResponse := response.Data
+		if agent.Markdown {
+			agentResponse = renderMarkdown(agentResponse)
+		}
+		if showMessage {
+			finalResponse += userResponse
+		}
+		finalResponse += utils.ResponseBox(agentResponse, true)
+		area.Update(finalResponse)
+		spinner.Stop()
+
+	} else {
+		// Streaming case
+		markdown := agent.Markdown
+		area.Update(buildContent(state, markdown))
+
+		ch, err := agent.RunStream(ctx, userMessage, media...)
+		if err != nil {
+			pterm.Error.Println("Error:", err)
+			return err
+		}
+
+		streamEnded := false
+		for resp := range ch {
+			switch resp.Event {
+			case "chunk":
+				state.isThinking = false
+				state.response += resp.Data
+				area.Update(buildContent(state, markdown))
+			case "tool_call":
+				if agent.ShowToolCalls {
+					for _, tc := range resp.ToolCalls {
+						toolCallStr := fmt.Sprintf("%s %s", tc.Name, tc.Arguments)
+						state.toolCalls = append(state.toolCalls, toolCallStr)
+					}
+					area.Update(buildContent(state, markdown))
+				}
+			case "end":
+				state.isThinking = false
+				area.Update(buildContent(state, markdown))
+				streamEnded = true
+
+			case "error":
+				state.isThinking = false
+				area.Update(buildContent(state, markdown) + "\nError: " + resp.Data)
+				streamEnded = true
+			}
+			if streamEnded {
+				break
+			}
+		}
+	}
+	return nil
 }
