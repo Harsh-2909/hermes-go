@@ -23,7 +23,7 @@ func main() {
 	// Initialize the model
 	model := &anthropic.Claude{
 		ApiKey:      os.Getenv("ANTHROPIC_API_KEY"),
-		Id:          "claude-3-5-haiku-latest",
+		Id:          "claude-3-5-sonnet-latest",
 		Temperature: 1.0,
 	}
 
