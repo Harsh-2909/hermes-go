@@ -1,5 +1,3 @@
-//go:build streaming
-
 package main
 
 import (
@@ -9,7 +7,7 @@ import (
 	"os"
 
 	"github.com/Harsh-2909/hermes-go/agent"
-	openai "github.com/Harsh-2909/hermes-go/models/openai"
+	anthropic "github.com/Harsh-2909/hermes-go/models/anthropic"
 
 	"github.com/joho/godotenv"
 )
@@ -22,10 +20,10 @@ func main() {
 	}
 
 	// Initialize the OpenAI model
-	model := &openai.OpenAIChat{
-		ApiKey:      os.Getenv("OPENAI_API_KEY"),
-		Id:          "gpt-4o-mini",
-		Temperature: 0.7,
+	model := &anthropic.Claude{
+		ApiKey:      os.Getenv("ANTHROPIC_API_KEY"),
+		Id:          "claude-3-5-haiku-latest",
+		Temperature: 1.0,
 	}
 
 	// Create a new agent
