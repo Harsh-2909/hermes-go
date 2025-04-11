@@ -402,13 +402,21 @@ func renderMarkdown(text string) string {
 
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
+	/**
+	* PrintResponse prints the agent's response with rich formatting
+	* The current implementation just works but the code and DX needs major improvement.
+	* 1. Create a struct object to get the terminal size at the start of print response.
+	* 2. Refactor this function to make the code cleaner and add repeating parts in a function.
+	* 3. Use grok for some inspiration on how to improve the code.
+	* 4. Leave support for adding tool calls, thinking, citations, etc.
+	 */
 	var userResponse string
 	var finalResponse string
 
 	state := printState{isThinking: true}
 	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
 	if err != nil {
-		pterm.Error.Println("Error:", err)
+		utils.Logger.Error("Unexpected error", "error", err)
 		return err
 	}
 	defer area.Stop()
@@ -424,9 +432,10 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		}
 		response, err := agent.Run(ctx, userMessage, media...)
 		if err != nil {
-			pterm.Error.Println("Error:", err)
+			utils.Logger.Error("Error occurred while running the agent", "error", err)
 			return err
 		}
+		spinner.Stop()
 		agentResponse := response.Data
 		if agent.Markdown {
 			agentResponse = renderMarkdown(agentResponse)
@@ -436,7 +445,6 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		}
 		finalResponse += utils.ResponseBox(agentResponse, true)
 		area.Update(finalResponse)
-		spinner.Stop()
 
 	} else {
 		// Streaming case
