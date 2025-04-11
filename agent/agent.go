@@ -402,6 +402,9 @@ func renderMarkdown(text string) string {
 
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
+	var userResponse string
+	var finalResponse string
+
 	state := printState{isThinking: true}
 	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
 	if err != nil {
@@ -409,15 +412,16 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		return err
 	}
 	defer area.Stop()
+	if showMessage {
+		userResponse = utils.MessageBox(userMessage, true)
+	}
+	spinner, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).Start("Thinking...")
+	defer spinner.Stop()
 	if !stream {
 		// Non streaming case
-		var finalResponse string
-		userResponse := utils.MessageBox(userMessage, true)
 		if showMessage {
 			area.Update(userResponse)
 		}
-		spinner, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).Start("Thinking...")
-		defer spinner.Stop()
 		response, err := agent.Run(ctx, userMessage, media...)
 		if err != nil {
 			pterm.Error.Println("Error:", err)
@@ -436,22 +440,36 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 
 	} else {
 		// Streaming case
+		var agentResponse string
 		markdown := agent.Markdown
-		area.Update(buildContent(state, markdown))
+		// area.Update(buildContent(state, markdown))
+		if showMessage {
+			area.Update(userResponse)
+		}
 
 		ch, err := agent.RunStream(ctx, userMessage, media...)
 		if err != nil {
 			pterm.Error.Println("Error:", err)
 			return err
 		}
-
+		spinner.Stop()
 		streamEnded := false
 		for resp := range ch {
+			finalResponse = ""
 			switch resp.Event {
 			case "chunk":
-				state.isThinking = false
-				state.response += resp.Data
-				area.Update(buildContent(state, markdown))
+				agentResponse += resp.Data
+				if agent.Markdown {
+					agentResponse = renderMarkdown(agentResponse)
+				}
+				if showMessage {
+					finalResponse += userResponse
+				}
+				finalResponse += utils.ResponseBox(agentResponse, true)
+				area.Update(finalResponse)
+				// state.isThinking = false
+				// state.response += resp.Data
+				// area.Update(buildContent(state, markdown))
 			case "tool_call":
 				if agent.ShowToolCalls {
 					for _, tc := range resp.ToolCalls {
@@ -461,13 +479,11 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 					area.Update(buildContent(state, markdown))
 				}
 			case "end":
-				state.isThinking = false
-				area.Update(buildContent(state, markdown))
 				streamEnded = true
 
 			case "error":
-				state.isThinking = false
-				area.Update(buildContent(state, markdown) + "\nError: " + resp.Data)
+				// state.isThinking = false
+				// area.Update(buildContent(state, markdown) + "\nError: " + resp.Data)
 				streamEnded = true
 			}
 			if streamEnded {
