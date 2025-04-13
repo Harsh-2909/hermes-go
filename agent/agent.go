@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -373,63 +372,6 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 	return ch, nil
 }
 
-// renderState holds the state for rendering responses
-type renderState struct {
-	termWidth    int
-	isMarkdown   bool
-	userMessage  string
-	response     string
-	toolCalls    []tools.ToolCall
-	errorMessage string
-	streamEnded  bool
-}
-
-// buildContent constructs the final output string based on the render state
-func buildContent(state renderState, showMessage bool) string {
-	/* Steps to build the content:
-	1. Add user message if `showMessage` is true
-	2. Add reasoning from tools or secondary models if available (for the future)
-	3. Add thinking if available (for the future)
-	4. Add tool calls if available
-	5. Add response. Handle Markdown, word wrap, etc.
-	6. Add citations if available (for the future)
-	7. Add error if any at the end
-	8. Return the output to be rendered by pterm.
-	*/
-	var output string
-	var toolCallStr string
-
-	// User Message
-	if showMessage {
-		output += utils.MessageBox(state.userMessage, state.termWidth)
-	}
-
-	// Tool Calls
-	for _, toolCall := range state.toolCalls {
-		toolCallStr += fmt.Sprintf("• %s %s\n", toolCall.Name, toolCall.Arguments)
-	}
-	if toolCallStr != "" {
-		toolCallStr = strings.TrimRight(toolCallStr, "\n")
-		output += utils.ToolCallBox(toolCallStr, state.termWidth)
-	}
-
-	// Response
-	if state.response != "" {
-		if state.isMarkdown {
-			resp := utils.RenderMarkdown(state.response, state.termWidth)
-			output += utils.ResponseBox(resp, state.termWidth, false)
-		} else {
-			output += utils.ResponseBox(state.response, state.termWidth, true)
-		}
-	}
-
-	// Error Message
-	if state.errorMessage != "" {
-		output += utils.ErrorBox(state.errorMessage, state.termWidth)
-	}
-	return output
-}
-
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
 	agent.Init() // Ensure the agent is initialized
@@ -440,10 +382,11 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 	}
 
 	// Initialize render state
-	state := renderState{
-		termWidth:   termWidth,
-		userMessage: userMessage,
-		isMarkdown:  agent.Markdown,
+	tp := TerminalPrinter{
+		showUserMessage: showMessage,
+		termWidth:       termWidth,
+		userMessage:     userMessage,
+		isMarkdown:      agent.Markdown,
 	}
 
 	// Set up the area for rendering
@@ -460,43 +403,39 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 
 	if !stream {
 		// Non-streaming case
-		if showMessage {
-			area.Update(utils.MessageBox(state.userMessage, state.termWidth))
-		}
+		area.Update(tp.buildContent())
 		response, err := agent.Run(ctx, userMessage, media...)
 		if err != nil {
-			state.errorMessage = err.Error()
+			tp.errorMessage = err.Error()
 		}
 		spinner.Stop()
-		state.toolCalls = response.ToolCalls
-		state.response = response.Data
-		area.Update(buildContent(state, showMessage))
+		tp.toolCalls = response.ToolCalls
+		tp.response = response.Data
+		area.Update(tp.buildContent())
 	} else {
 		// Streaming case
-		if showMessage {
-			area.Update(utils.MessageBox(state.userMessage, state.termWidth))
-		}
+		area.Update(tp.buildContent())
 		ch, err := agent.RunStream(ctx, userMessage, media...)
 		if err != nil {
-			state.errorMessage = err.Error()
+			tp.errorMessage = err.Error()
 		}
 		spinner.Stop()
 		for resp := range ch {
 			switch resp.Event {
 			case "chunk":
-				state.response += resp.Data
-				area.Update(buildContent(state, showMessage))
+				tp.response += resp.Data
+				area.Update(tp.buildContent())
 			case "tool_call":
-				state.toolCalls = append(state.toolCalls, resp.ToolCalls...)
-				area.Update(buildContent(state, showMessage))
+				tp.toolCalls = append(tp.toolCalls, resp.ToolCalls...)
+				area.Update(tp.buildContent())
 			case "end":
-				state.streamEnded = true
+				tp.streamEnded = true
 			case "error":
-				state.errorMessage = resp.Data
-				area.Update(buildContent(state, showMessage))
-				state.streamEnded = true
+				tp.errorMessage = resp.Data
+				area.Update(tp.buildContent())
+				tp.streamEnded = true
 			}
-			if state.streamEnded {
+			if tp.streamEnded {
 				break
 			}
 		}
