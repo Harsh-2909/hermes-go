@@ -5,21 +5,6 @@ import (
 	"github.com/pterm/pterm"
 )
 
-// PrintError prints an error message in red color.
-func PrintError(err error) {
-	pterm.Error.Println(err)
-}
-
-// PrintSuccess prints a success message in green color.
-func PrintSuccess(msg string) {
-	pterm.Success.Println(msg)
-}
-
-// PrintInfo prints an info message in blue color.
-func PrintInfo(msg string) {
-	pterm.Info.Println(msg)
-}
-
 // renderMarkdown renders text as markdown using glamour
 func RenderMarkdown(text string, terminalWidth int) string {
 	renderer, _ := glamour.NewTermRenderer(
