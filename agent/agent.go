@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -211,6 +212,9 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
 	}
 
+	// Save all the tool calls made by the assistant here. This will be returned in response
+	var toolCalls []tools.ToolCall
+
 	for {
 		response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
 		if err != nil {
@@ -222,7 +226,6 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 			Content: response.Data,
 		}
 		if response.Event == "tool_call" {
-			// fmt.Printf("\n%+v\n", response)
 			assistantMessage.ToolCalls = response.ToolCalls
 			agent.Messages = append(agent.Messages, assistantMessage)
 
@@ -241,7 +244,7 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 				result, err := tool.Execute(ctx, toolCall.Arguments)
 				if err != nil {
 					utils.Logger.Error("Tool execution failed", "name", toolCall.Name, "error", err)
-					result = fmt.Sprintf("Error: %v", err)
+					result = fmt.Sprintf("Error: %s", err.Error())
 				}
 				utils.Logger.Debug("Tool execution complete", "name", toolCall.Name, "result", result)
 				agent.Messages = append(agent.Messages, models.Message{
@@ -249,10 +252,12 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 					Content:    result,
 					ToolCallID: toolCall.ID,
 				})
+				toolCalls = append(toolCalls, toolCall)
 			}
 
 		} else if response.Event == "complete" {
 			agent.Messages = append(agent.Messages, assistantMessage)
+			response.ToolCalls = toolCalls
 			utils.Logger.Debug("Agent Run End")
 			return response, nil
 		} else {
@@ -305,6 +310,12 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 							Data:      resp.Data,
 							CreatedAt: time.Now(),
 						}
+					}
+					// Send a separate event for tool calls
+					ch <- models.ModelResponse{
+						Event:     "tool_call",
+						ToolCalls: resp.ToolCalls,
+						CreatedAt: time.Now(),
 					}
 				} else if resp.Event == "end" {
 					// Break from the loop and handle the logic outside the response channel loop
@@ -386,13 +397,23 @@ func buildContent(state renderState, showMessage bool) string {
 	8. Return the output to be rendered by pterm.
 	*/
 	var output string
+	var toolCallStr string
+
+	// User Message
 	if showMessage {
 		output += utils.MessageBox(state.userMessage, state.termWidth)
 	}
+
+	// Tool Calls
 	for _, toolCall := range state.toolCalls {
-		toolCallStr := toolCall.Name + " " + toolCall.Arguments
+		toolCallStr += fmt.Sprintf("• %s %s\n", toolCall.Name, toolCall.Arguments)
+	}
+	if toolCallStr != "" {
+		toolCallStr = strings.TrimRight(toolCallStr, "\n")
 		output += utils.ToolCallBox(toolCallStr, state.termWidth)
 	}
+
+	// Response
 	if state.response != "" {
 		if state.isMarkdown {
 			resp := utils.RenderMarkdown(state.response, state.termWidth)
@@ -401,6 +422,8 @@ func buildContent(state renderState, showMessage bool) string {
 			output += utils.ResponseBox(state.response, state.termWidth, true)
 		}
 	}
+
+	// Error Message
 	if state.errorMessage != "" {
 		output += utils.ErrorBox(state.errorMessage, state.termWidth)
 	}
@@ -445,8 +468,6 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 			state.errorMessage = err.Error()
 		}
 		spinner.Stop()
-		// TODO: Agent.Run() never returns the tool calls that have been executed in response.
-		// Check if it is needed or not.
 		state.toolCalls = response.ToolCalls
 		state.response = response.Data
 		area.Update(buildContent(state, showMessage))
@@ -466,8 +487,6 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 				state.response += resp.Data
 				area.Update(buildContent(state, showMessage))
 			case "tool_call":
-				// TODO: Agent.RunStream() never returns the tool calls that have been executed in response.
-				// Check if it is needed or not.
 				state.toolCalls = append(state.toolCalls, resp.ToolCalls...)
 				area.Update(buildContent(state, showMessage))
 			case "end":

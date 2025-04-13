@@ -113,7 +113,7 @@ func ThinkingBox(message string, termWidth int) string {
 // The tool call box is styled with a yellow border and a light yellow title.
 // The message is printed in yellow color.
 func ToolCallBox(toolCall string, termWidth int) string {
-	toolBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgYellow}).WithTitle(pterm.LightYellow("Tool Call"))
+	toolBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgYellow}).WithTitle(pterm.LightYellow("Tool Calls"))
 	toolBox, wrappedMessage := boxRenderer(toolBox, toolCall, termWidth, true)
 	return toolBox.Sprintfln(pterm.Yellow(wrappedMessage))
 }
