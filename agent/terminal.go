@@ -13,6 +13,7 @@ type TerminalPrinter struct {
 	isMarkdown      bool             // Flag to indicate if the response is in Markdown format
 	showUserMessage bool             // Flag to indicate if the user message should be shown
 	termWidth       int              // Width of the terminal for formatting
+	logs            string           // Logs to be displayed
 	userMessage     string           // User message to be displayed
 	toolCalls       []tools.ToolCall // List of tool calls made by the assistant
 	response        string           // Response from the assistant
@@ -23,17 +24,23 @@ type TerminalPrinter struct {
 // buildContent constructs the final output string based on the render state
 func (tp *TerminalPrinter) buildContent() string {
 	/* Steps to build the content:
-	1. Add user message if `showUserMessage` is true
-	2. Add reasoning from tools or secondary models if available (for the future)
-	3. Add thinking if available (for the future)
-	4. Add tool calls if available
-	5. Add response. Handle Markdown, word wrap, etc.
-	6. Add citations if available (for the future)
-	7. Add error if any at the end
-	8. Return the output to be rendered by pterm.
+	1. Add logs if available
+	2. Add user message if `showUserMessage` is true
+	3. Add reasoning from tools or secondary models if available (for the future)
+	4. Add thinking if available (for the future)
+	5. Add tool calls if available
+	6. Add response. Handle Markdown, word wrap, etc.
+	7. Add citations if available (for the future)
+	8. Add error if any at the end
+	9. Return the output to be rendered by pterm.
 	*/
 	var output string
 	var toolCallStr string
+
+	// Logs
+	if tp.logs != "" {
+		output += utils.LogBox(tp.logs, tp.termWidth)
+	}
 
 	// User Message
 	if tp.showUserMessage {

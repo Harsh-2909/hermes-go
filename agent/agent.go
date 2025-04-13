@@ -4,6 +4,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -372,6 +374,30 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 	return ch, nil
 }
 
+// captureHandler captures logs for PrintResponse
+type captureHandler struct {
+	original  slog.Handler
+	logBuffer strings.Builder
+}
+
+func (h *captureHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.original.Enabled(ctx, level)
+}
+
+func (h *captureHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.logBuffer.WriteString(r.Message + "\n")
+	// return h.original.Handle(ctx, r)
+	return nil
+}
+
+func (h *captureHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &captureHandler{original: h.original.WithAttrs(attrs)}
+}
+
+func (h *captureHandler) WithGroup(name string) slog.Handler {
+	return &captureHandler{original: h.original.WithGroup(name)}
+}
+
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
 	agent.Init() // Ensure the agent is initialized
@@ -381,7 +407,12 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		termWidth = 100 // Fallback to default width
 	}
 
-	// Initialize render state
+	// Store the original slog handler and set the custom handler.
+	// We are doing this to capture the logs in logBuffer and print them with the response.
+	var logBuffer strings.Builder
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(&captureHandler{original: originalHandler, logBuffer: logBuffer}))
+
 	tp := TerminalPrinter{
 		showUserMessage: showMessage,
 		termWidth:       termWidth,
@@ -393,9 +424,13 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
 	if err != nil {
 		utils.Logger.Error("Unexpected error", "error", err)
+		slog.SetDefault(slog.New(originalHandler)) // Restore original handler
 		return err
 	}
-	defer area.Stop()
+	defer func() {
+		area.Stop()
+		slog.SetDefault(slog.New(originalHandler)) // Restore original handler
+	}()
 
 	// Show spinner while thinking
 	spinner, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).Start("Thinking...")
@@ -403,6 +438,7 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 
 	if !stream {
 		// Non-streaming case
+		tp.logs = logBuffer.String()
 		area.Update(tp.buildContent())
 		response, err := agent.Run(ctx, userMessage, media...)
 		if err != nil {
@@ -411,9 +447,11 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		spinner.Stop()
 		tp.toolCalls = response.ToolCalls
 		tp.response = response.Data
+		tp.logs = logBuffer.String()
 		area.Update(tp.buildContent())
 	} else {
 		// Streaming case
+		tp.logs = logBuffer.String()
 		area.Update(tp.buildContent())
 		ch, err := agent.RunStream(ctx, userMessage, media...)
 		if err != nil {
@@ -424,14 +462,17 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 			switch resp.Event {
 			case "chunk":
 				tp.response += resp.Data
+				tp.logs = logBuffer.String()
 				area.Update(tp.buildContent())
 			case "tool_call":
 				tp.toolCalls = append(tp.toolCalls, resp.ToolCalls...)
+				tp.logs = logBuffer.String()
 				area.Update(tp.buildContent())
 			case "end":
 				tp.streamEnded = true
 			case "error":
 				tp.errorMessage = resp.Data
+				tp.logs = logBuffer.String()
 				area.Update(tp.buildContent())
 				tp.streamEnded = true
 			}

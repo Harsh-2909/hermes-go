@@ -1,22 +1,8 @@
 package utils
 
 import (
-	"github.com/charmbracelet/glamour"
 	"github.com/pterm/pterm"
 )
-
-// renderMarkdown renders text as markdown using glamour
-func RenderMarkdown(text string, terminalWidth int) string {
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(terminalWidth-2),
-	)
-	rendered, err := renderer.Render(text)
-	if err != nil {
-		return text // Fallback to plain text if rendering fails
-	}
-	return rendered
-}
 
 // PaddedBox is a custom box printer for hermes-go.
 var PaddedBox = pterm.BoxPrinter{
@@ -122,4 +108,14 @@ func ErrorBox(errMsg string, termWidth int) string {
 	errorBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgRed}).WithTitle(pterm.LightRed("Error"))
 	errorBox, wrappedMessage := boxRenderer(errorBox, errMsg, termWidth, true)
 	return errorBox.Sprintfln(pterm.Red(wrappedMessage))
+}
+
+// LogBox creates a styled box for log messages
+//
+// The log box is styled with a gray border and a gray title.
+// The message is printed in gray color.
+func LogBox(logs string, termWidth int) string {
+	logBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgGray}).WithTitle(pterm.Gray("Logs"))
+	logBox, wrappedLogs := boxRenderer(logBox, logs, termWidth, true)
+	return logBox.Sprintfln(pterm.Gray(wrappedLogs))
 }
