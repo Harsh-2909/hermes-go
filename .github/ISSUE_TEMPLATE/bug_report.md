@@ -1,38 +1,39 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+about: Create a report to help us fix bugs and improve Hermes
+title: '[Bug]'
+labels: 'bug'
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+# Description
+Briefly describe the issue you’re experiencing or the bug you’ve found.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Steps to Reproduce
+List the steps needed to encounter this bug or issue.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Agent Configuration (if applicable)
+Provide relevant agent configuration.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## Expected Behavior
+What did you expect to happen?
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## Actual Behavior
+What actually happened instead?
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+## Screenshots or Logs (if applicable)
+Include any relevant screenshots or error logs that demonstrate the issue.
 
-**Additional context**
-Add any other context about the problem here.
+## Environment
+- OS: (e.g. macOS, Windows 11)
+- Browser (if relevant): (e.g. Chrome 108, Firefox 107)
+- Agno Version: (e.g. v1.0.0)
+- External Dependency Versions: (e.g., yfinance 0.2.52)
+- Additional Environment Details: (e.g., Python 3.10)
+
+## Possible Solutions (optional)
+Suggest any ideas you might have to fix or address the issue.
+
+## Additional Context
+Add any other context or details about the problem here.
