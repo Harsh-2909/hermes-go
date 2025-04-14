@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -374,30 +373,6 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 	return ch, nil
 }
 
-// captureHandler captures logs for PrintResponse
-type captureHandler struct {
-	original  slog.Handler
-	logBuffer strings.Builder
-}
-
-func (h *captureHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.original.Enabled(ctx, level)
-}
-
-func (h *captureHandler) Handle(ctx context.Context, r slog.Record) error {
-	h.logBuffer.WriteString(r.Message + "\n")
-	// return h.original.Handle(ctx, r)
-	return nil
-}
-
-func (h *captureHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &captureHandler{original: h.original.WithAttrs(attrs)}
-}
-
-func (h *captureHandler) WithGroup(name string) slog.Handler {
-	return &captureHandler{original: h.original.WithGroup(name)}
-}
-
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
 	agent.Init() // Ensure the agent is initialized
@@ -410,8 +385,8 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 	// Store the original slog handler and set the custom handler.
 	// We are doing this to capture the logs in logBuffer and print them with the response.
 	var logBuffer strings.Builder
-	originalHandler := slog.Default().Handler()
-	slog.SetDefault(slog.New(&captureHandler{original: originalHandler, logBuffer: logBuffer}))
+	originalWriter := utils.DefaultLogger.Writer
+	utils.DefaultLogger = *utils.DefaultLogger.WithWriter(&logBuffer)
 
 	tp := TerminalPrinter{
 		showUserMessage: showMessage,
@@ -424,12 +399,12 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
 	if err != nil {
 		utils.Logger.Error("Unexpected error", "error", err)
-		slog.SetDefault(slog.New(originalHandler)) // Restore original handler
+		utils.DefaultLogger = *utils.DefaultLogger.WithWriter(originalWriter) // Restore the original writer.
 		return err
 	}
 	defer func() {
 		area.Stop()
-		slog.SetDefault(slog.New(originalHandler)) // Restore original handler
+		utils.DefaultLogger = *utils.DefaultLogger.WithWriter(originalWriter) // Restore the original writer.
 	}()
 
 	// Show spinner while thinking

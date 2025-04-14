@@ -117,5 +117,5 @@ func ErrorBox(errMsg string, termWidth int) string {
 func LogBox(logs string, termWidth int) string {
 	logBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgGray}).WithTitle(pterm.Gray("Logs"))
 	logBox, wrappedLogs := boxRenderer(logBox, logs, termWidth, true)
-	return logBox.Sprintfln(pterm.Gray(wrappedLogs))
+	return logBox.Sprintfln(wrappedLogs)
 }
