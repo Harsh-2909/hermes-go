@@ -39,7 +39,7 @@ func (tp *TerminalPrinter) buildContent() string {
 
 	// Logs
 	if tp.logs != "" {
-		output += utils.LogBox(tp.logs, tp.termWidth)
+		output += tp.logs + "\n"
 	}
 
 	// User Message

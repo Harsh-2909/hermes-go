@@ -109,13 +109,3 @@ func ErrorBox(errMsg string, termWidth int) string {
 	errorBox, wrappedMessage := boxRenderer(errorBox, errMsg, termWidth, true)
 	return errorBox.Sprintfln(pterm.Red(wrappedMessage))
 }
-
-// LogBox creates a styled box for log messages
-//
-// The log box is styled with a gray border and a gray title.
-// The message is printed in gray color.
-func LogBox(logs string, termWidth int) string {
-	logBox := PaddedBox.WithBoxStyle(&pterm.Style{pterm.FgGray}).WithTitle(pterm.Gray("Logs"))
-	logBox, wrappedLogs := boxRenderer(logBox, logs, termWidth, true)
-	return logBox.Sprintfln(wrappedLogs)
-}
