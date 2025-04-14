@@ -4,9 +4,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/charmbracelet/glamour"
 	"github.com/pterm/pterm"
 
 	"github.com/Harsh-2909/hermes-go/models"
@@ -167,7 +167,10 @@ func (agent *Agent) getSystemMessage() models.Message {
 		}
 		systemMessageContent += "\n</additional_information>\n\n"
 	}
-	utils.Logger.Debug("System Message", "system_message", systemMessageContent)
+	if systemMessageContent != "" {
+		utils.Logger.Debug("============== system ==============")
+		utils.Logger.Debug(systemMessageContent)
+	}
 	return models.Message{Role: "system", Content: systemMessageContent}
 }
 
@@ -209,6 +212,9 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 		return models.ModelResponse{}, fmt.Errorf("no messages available for chat completion")
 	}
 
+	// Save all the tool calls made by the assistant here. This will be returned in response
+	var toolCalls []tools.ToolCall
+
 	for {
 		response, err := agent.Model.ChatCompletion(ctx, agent.Messages)
 		if err != nil {
@@ -220,7 +226,6 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 			Content: response.Data,
 		}
 		if response.Event == "tool_call" {
-			// fmt.Printf("\n%+v\n", response)
 			assistantMessage.ToolCalls = response.ToolCalls
 			agent.Messages = append(agent.Messages, assistantMessage)
 
@@ -239,7 +244,7 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 				result, err := tool.Execute(ctx, toolCall.Arguments)
 				if err != nil {
 					utils.Logger.Error("Tool execution failed", "name", toolCall.Name, "error", err)
-					result = fmt.Sprintf("Error: %v", err)
+					result = fmt.Sprintf("Error: %s", err.Error())
 				}
 				utils.Logger.Debug("Tool execution complete", "name", toolCall.Name, "result", result)
 				agent.Messages = append(agent.Messages, models.Message{
@@ -247,10 +252,12 @@ func (agent *Agent) Run(ctx context.Context, userMessage string, media ...models
 					Content:    result,
 					ToolCallID: toolCall.ID,
 				})
+				toolCalls = append(toolCalls, toolCall)
 			}
 
 		} else if response.Event == "complete" {
 			agent.Messages = append(agent.Messages, assistantMessage)
+			response.ToolCalls = toolCalls
 			utils.Logger.Debug("Agent Run End")
 			return response, nil
 		} else {
@@ -303,6 +310,12 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 							Data:      resp.Data,
 							CreatedAt: time.Now(),
 						}
+					}
+					// Send a separate event for tool calls
+					ch <- models.ModelResponse{
+						Event:     "tool_call",
+						ToolCalls: resp.ToolCalls,
+						CreatedAt: time.Now(),
 					}
 				} else if resp.Event == "end" {
 					// Break from the loop and handle the logic outside the response channel loop
@@ -360,133 +373,85 @@ func (agent *Agent) RunStream(ctx context.Context, userMessage string, media ...
 	return ch, nil
 }
 
-// printState holds the current state for streaming display
-type printState struct {
-	isThinking bool
-	toolCalls  []string
-	response   string
-}
-
-// buildContent constructs the display content based on the state
-func buildContent(state printState, markdown bool) string {
-	var content string
-	if state.isThinking {
-		content += "Thinking...\n\n"
-	}
-	for _, tc := range state.toolCalls {
-		content += pterm.Yellow("Tool Call:") + " " + tc + "\n"
-	}
-	if state.response != "" {
-		content += "Response:\n"
-		if markdown {
-			content += renderMarkdown(state.response)
-		} else {
-			content += state.response
-		}
-	}
-	return content
-}
-
-// renderMarkdown renders text as markdown using glamour
-func renderMarkdown(text string) string {
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
-	)
-	rendered, err := renderer.Render(text)
-	if err != nil {
-		return text // Fallback to plain text if rendering fails
-	}
-	return rendered
-}
-
 // PrintResponse prints the agent's response with rich formatting
 func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, stream bool, showMessage bool, media ...models.Media) error {
-	var userResponse string
-	var finalResponse string
+	agent.Init() // Ensure the agent is initialized
+	// Fetch terminal width once at the start
+	termWidth, _, err := pterm.GetTerminalSize()
+	if err != nil {
+		termWidth = 100 // Fallback to default width
+	}
 
-	state := printState{isThinking: true}
+	// Store the original slog handler and set the custom handler.
+	// We are doing this to capture the logs in logBuffer and print them with the response.
+	var logBuffer strings.Builder
+	originalWriter := utils.DefaultLogger.Writer
+	utils.DefaultLogger = *utils.DefaultLogger.WithWriter(&logBuffer)
+
+	tp := TerminalPrinter{
+		showUserMessage: showMessage,
+		termWidth:       termWidth,
+		userMessage:     userMessage,
+		isMarkdown:      agent.Markdown,
+	}
+
+	// Set up the area for rendering
 	area, err := pterm.DefaultArea.WithRemoveWhenDone(false).Start()
 	if err != nil {
-		pterm.Error.Println("Error:", err)
+		utils.Logger.Error("Unexpected error", "error", err)
+		utils.DefaultLogger = *utils.DefaultLogger.WithWriter(originalWriter) // Restore the original writer.
 		return err
 	}
-	defer area.Stop()
-	if showMessage {
-		userResponse = utils.MessageBox(userMessage, true)
-	}
+	defer func() {
+		area.Stop()
+		utils.DefaultLogger = *utils.DefaultLogger.WithWriter(originalWriter) // Restore the original writer.
+	}()
+
+	// Show spinner while thinking
 	spinner, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).Start("Thinking...")
 	defer spinner.Stop()
+
 	if !stream {
-		// Non streaming case
-		if showMessage {
-			area.Update(userResponse)
-		}
+		// Non-streaming case
+		tp.logs = logBuffer.String()
+		area.Update(tp.buildContent())
 		response, err := agent.Run(ctx, userMessage, media...)
 		if err != nil {
-			pterm.Error.Println("Error:", err)
-			return err
+			tp.errorMessage = err.Error()
 		}
-		agentResponse := response.Data
-		if agent.Markdown {
-			agentResponse = renderMarkdown(agentResponse)
-		}
-		if showMessage {
-			finalResponse += userResponse
-		}
-		finalResponse += utils.ResponseBox(agentResponse, true)
-		area.Update(finalResponse)
 		spinner.Stop()
-
+		tp.toolCalls = response.ToolCalls
+		tp.response = response.Data
+		tp.logs = logBuffer.String()
+		area.Update(tp.buildContent())
 	} else {
 		// Streaming case
-		var agentResponse string
-		markdown := agent.Markdown
-		// area.Update(buildContent(state, markdown))
-		if showMessage {
-			area.Update(userResponse)
-		}
-
+		tp.logs = logBuffer.String()
+		area.Update(tp.buildContent())
 		ch, err := agent.RunStream(ctx, userMessage, media...)
 		if err != nil {
-			pterm.Error.Println("Error:", err)
-			return err
+			tp.errorMessage = err.Error()
 		}
 		spinner.Stop()
-		streamEnded := false
 		for resp := range ch {
-			finalResponse = ""
 			switch resp.Event {
 			case "chunk":
-				agentResponse += resp.Data
-				if agent.Markdown {
-					agentResponse = renderMarkdown(agentResponse)
-				}
-				if showMessage {
-					finalResponse += userResponse
-				}
-				finalResponse += utils.ResponseBox(agentResponse, true)
-				area.Update(finalResponse)
-				// state.isThinking = false
-				// state.response += resp.Data
-				// area.Update(buildContent(state, markdown))
+				tp.response += resp.Data
+				tp.logs = logBuffer.String()
+				area.Update(tp.buildContent())
 			case "tool_call":
-				if agent.ShowToolCalls {
-					for _, tc := range resp.ToolCalls {
-						toolCallStr := fmt.Sprintf("%s %s", tc.Name, tc.Arguments)
-						state.toolCalls = append(state.toolCalls, toolCallStr)
-					}
-					area.Update(buildContent(state, markdown))
-				}
+				tp.toolCalls = append(tp.toolCalls, resp.ToolCalls...)
+				tp.logs = logBuffer.String()
+				area.Update(tp.buildContent())
 			case "end":
-				streamEnded = true
-
+				tp.streamEnded = true
 			case "error":
-				// state.isThinking = false
-				// area.Update(buildContent(state, markdown) + "\nError: " + resp.Data)
-				streamEnded = true
+				tp.errorMessage = resp.Data
+				tp.logs = logBuffer.String()
+				area.Update(tp.buildContent())
+				tp.streamEnded = true
 			}
-			if streamEnded {
+			if tp.streamEnded {
 				break
 			}
 		}
