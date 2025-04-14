@@ -88,7 +88,7 @@ func TestRenderMarkdown(t *testing.T) {
 				if tt.input != "" {
 					assert.NotEmpty(t, got, "Expected non-empty rendered output")
 					// Strip ANSI codes for content check
-					plainGot := stripANSI(got)
+					plainGot := StripANSI(got)
 					// Remove leading/trailing whitespace and newlines
 					ss := strings.Split(plainGot, "\n")
 					for i := range ss {
@@ -105,7 +105,7 @@ func TestRenderMarkdown(t *testing.T) {
 					lines := strings.Split(got, "\n")
 					for _, line := range lines {
 						// Account for ANSI codes inflating length; approximate check
-						assert.LessOrEqual(t, len(stripANSI(line)), tt.terminalWidth, "Line exceeds word wrap width")
+						assert.LessOrEqual(t, len(StripANSI(line)), tt.terminalWidth, "Line exceeds word wrap width")
 					}
 				}
 			}
@@ -114,7 +114,7 @@ func TestRenderMarkdown(t *testing.T) {
 }
 
 // stripANSI removes ANSI escape codes for testing purposes
-func stripANSI(s string) string {
+func StripANSI(s string) string {
 	// Use regexp to remove common ANSI escape codes
 	ansiRegexp := regexp.MustCompile(`\x1B\[[0-9;]*[a-zA-Z]`)
 	s = ansiRegexp.ReplaceAllString(s, "")
