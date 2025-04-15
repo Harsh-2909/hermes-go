@@ -45,6 +45,34 @@ func (t *TestToolkit) Check(ctx context.Context, flag bool) string {
 	return "No"
 }
 
+// WithSlice is a method which returns the length of the slice.
+// It is used to test the handling of slice parameters.
+// @param s: A slice of integers
+func (t *TestToolkit) WithSlice(ctx context.Context, s []int) int {
+	return len(s)
+}
+
+// CheckParams checks the parameters and returns "empty" if the string is empty.
+// It is used to check if @params label is suppported in the doc comment.
+// @params s: A string parameter
+func (t *TestToolkit) CheckParams(ctx context.Context, s string) string {
+	if s == "" {
+		return "empty"
+	}
+	return s
+}
+
+// AddWithOptional adds the integer a with the length of b.
+// It is used to check the handling of optional parameters.
+// @param a: The first integer
+// @param [optional] b: The second integer
+func (t *TestToolkit) AddWithOptional(ctx context.Context, a int, b string) int {
+	if b == "" {
+		return a
+	}
+	return a + len(b)
+}
+
 // NoCtx is a method without context.Context for error testing.
 func (t *TestToolkit) NoCtx(a int) int {
 	return a
@@ -57,11 +85,6 @@ func (t *TestToolkit) NoReturn(ctx context.Context) {
 // TooManyReturns is a method with too many return values for error testing.
 func (t *TestToolkit) TooManyReturns(ctx context.Context) (int, string, error) {
 	return 0, "", nil
-}
-
-// WithSlice is a method with an unsupported parameter type for error testing.
-func (t *TestToolkit) WithSlice(ctx context.Context, s []int) int {
-	return len(s)
 }
 
 func (t *TestToolkit) NoDoc(ctx context.Context, x int) int {
@@ -182,6 +205,38 @@ func TestCreateToolFromMethod(t *testing.T) {
 		assert.Equal(t, "\"No\"", result)
 	})
 
+	// Test method with slice parameter
+	t.Run("WithSlice", func(t *testing.T) {
+		tool, err := CreateToolFromMethod(toolkit, "WithSlice")
+		assert.NoError(t, err)
+		result, err := tool.Execute(context.Background(), `{"s": [1, 2, 3]}`)
+		assert.NoError(t, err)
+		assert.Equal(t, "3", result) // Verify correct execution
+	})
+
+	t.Run("CheckParams", func(t *testing.T) {
+		tool, err := CreateToolFromMethod(toolkit, "CheckParams")
+		assert.NoError(t, err)                                                                                                                     // Verify no error
+		assert.Equal(t, "CheckParams", tool.Name)                                                                                                  // Verify Name
+		assert.Equal(t, "CheckParams checks the parameters and returns \"empty\" if the string is empty.", tool.Description)                       // Verify Description
+		assert.Equal(t, "object", tool.Parameters["type"])                                                                                         // Verify Parameters type
+		assert.Equal(t, "A string parameter", tool.Parameters["properties"].(map[string]interface{})["s"].(map[string]interface{})["description"]) // Verify Parameters description
+	})
+
+	t.Run("AddWithOptional", func(t *testing.T) {
+		tool, err := CreateToolFromMethod(toolkit, "AddWithOptional")
+		assert.NoError(t, err)                                                                        // Verify no error
+		assert.Equal(t, "AddWithOptional", tool.Name)                                                 // Verify Name
+		assert.Equal(t, "AddWithOptional adds the integer a with the length of b.", tool.Description) // Verify Description
+
+		result, err := tool.Execute(context.Background(), `{"a": 2, "b": "hello"}`)
+		assert.NoError(t, err)       // Verify no error
+		assert.Equal(t, "7", result) // Verify correct execution
+		result, err = tool.Execute(context.Background(), `{"a": 2}`)
+		assert.NoError(t, err)       // Verify no error
+		assert.Equal(t, "2", result) // Verify correct execution
+	})
+
 	// Error case: Non-existent method
 	t.Run("NonExistentMethod", func(t *testing.T) {
 		_, err := CreateToolFromMethod(toolkit, "Subtract")
@@ -204,12 +259,6 @@ func TestCreateToolFromMethod(t *testing.T) {
 	t.Run("TooManyReturns", func(t *testing.T) {
 		_, err := CreateToolFromMethod(toolkit, "TooManyReturns")
 		assert.Error(t, err) // Verify error for method with too many return values
-	})
-
-	// Error case: Unsupported parameter type
-	t.Run("WithSlice", func(t *testing.T) {
-		_, err := CreateToolFromMethod(toolkit, "WithSlice")
-		assert.Error(t, err) // Verify error for unsupported parameter type []int
 	})
 
 	// Error case: No doc comments

@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -34,13 +35,10 @@ func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) 
 	}
 
 	// Check return values: either one value or (value, error)
-	// var returnType reflect.Type
 	var hasError bool
 	if methodType.NumOut() == 1 {
-		// returnType = methodType.Out(0)
 		hasError = false
 	} else if methodType.NumOut() == 2 && methodType.Out(1) == reflect.TypeOf((*error)(nil)).Elem() {
-		// returnType = methodType.Out(0)
 		hasError = true
 	} else {
 		return Tool{}, fmt.Errorf("method must return one value or (value, error)")
@@ -151,14 +149,34 @@ func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) 
 	description := strings.TrimSpace(lines[0]) // First line is the description
 
 	paramDescs := make(map[string]string)
+	required := make([]string, 0)
 	for _, line := range lines[1:] {
 		line = strings.TrimSpace(line)
+
+		// Checking for @param or @params prefix. Either is supported
+		var prefix string
 		if strings.HasPrefix(line, "@param ") {
-			parts := strings.SplitN(line[7:], ":", 2)
+			prefix = "@param "
+		} else if strings.HasPrefix(line, "@params ") {
+			prefix = "@params "
+		}
+		if prefix != "" {
+			paramLine := strings.TrimPrefix(line, prefix)
+			isOptional := false
+
+			// Checks for optional parameter
+			if strings.HasPrefix(paramLine, "[optional] ") {
+				isOptional = true
+				paramLine = strings.TrimPrefix(paramLine, "[optional] ")
+			}
+			parts := strings.SplitN(paramLine, ":", 2)
 			if len(parts) == 2 {
 				name := strings.TrimSpace(parts[0])
 				desc := strings.TrimSpace(parts[1])
 				paramDescs[name] = desc
+				if !isOptional {
+					required = append(required, name)
+				}
 			}
 		}
 	}
@@ -176,7 +194,6 @@ func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) 
 
 	// Build JSON schema parameters
 	properties := make(map[string]interface{})
-	required := make([]string, 0, len(paramNames))
 	for i, name := range paramNames {
 		schemaType, ok := goTypeToJSONSchemaType(paramTypes[i])
 		if !ok {
@@ -186,7 +203,6 @@ func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) 
 			"type":        schemaType,
 			"description": paramDescs[name],
 		}
-		required = append(required, name)
 	}
 	parameters := map[string]interface{}{
 		"type":       "object",
@@ -206,13 +222,34 @@ func CreateToolFromMethod(toolkit interface{}, methodName string) (Tool, error) 
 		for i, name := range paramNames {
 			val, ok := argMap[name]
 			if !ok {
-				return "", fmt.Errorf("missing parameter: %s", name)
+				// check if the parameter is optional
+				if slices.Contains(required, name) {
+					return "", fmt.Errorf("missing required parameter: %s", name)
+				}
+				// Use default value for missing optional parameters.
+				switch paramTypes[i].Kind() {
+				case reflect.String:
+					argValues = append(argValues, reflect.ValueOf(""))
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					argValues = append(argValues, reflect.ValueOf(0))
+				case reflect.Float32, reflect.Float64:
+					argValues = append(argValues, reflect.ValueOf(0.0))
+				case reflect.Bool:
+					argValues = append(argValues, reflect.ValueOf(false))
+				case reflect.Slice:
+					argValues = append(argValues, reflect.ValueOf([]interface{}{}))
+				case reflect.Map:
+					argValues = append(argValues, reflect.ValueOf(make(map[string]interface{})))
+				default:
+					return "", fmt.Errorf("optional Parameter %s with type %s not supported", name, paramTypes[i])
+				}
+			} else {
+				converted, err := convertJSONValueToGoType(val, paramTypes[i])
+				if err != nil {
+					return "", fmt.Errorf("type conversion failed for %s: %v", name, err)
+				}
+				argValues = append(argValues, reflect.ValueOf(converted))
 			}
-			converted, err := convertJSONValueToGoType(val, paramTypes[i])
-			if err != nil {
-				return "", fmt.Errorf("type conversion failed for %s: %v", name, err)
-			}
-			argValues = append(argValues, reflect.ValueOf(converted))
 		}
 
 		// Call the method
@@ -254,8 +291,12 @@ func goTypeToJSONSchemaType(t reflect.Type) (string, bool) {
 		return "string", true
 	case reflect.Bool:
 		return "boolean", true
+	case reflect.Slice:
+		return "array", true
+	case reflect.Map:
+		return "object", true
 	default:
-		return "", false // Add more types as needed
+		return "", false
 	}
 }
 
@@ -276,6 +317,31 @@ func convertJSONValueToGoType(val interface{}, t reflect.Type) (interface{}, err
 	case reflect.Bool:
 		if b, ok := val.(bool); ok {
 			return b, nil
+		}
+	case reflect.Slice:
+		if arr, ok := val.([]interface{}); ok {
+			slice := reflect.MakeSlice(t, len(arr), len(arr))
+			for i, v := range arr {
+				elem, err := convertJSONValueToGoType(v, t.Elem())
+				if err != nil {
+					return nil, err
+				}
+				slice.Index(i).Set(reflect.ValueOf(elem))
+			}
+			return slice.Interface(), nil
+		}
+	case reflect.Map:
+		if m, ok := val.(map[string]interface{}); ok {
+			mapType := reflect.MapOf(reflect.TypeOf(""), t.Elem())
+			newMap := reflect.MakeMap(mapType)
+			for k, v := range m {
+				elem, err := convertJSONValueToGoType(v, t.Elem())
+				if err != nil {
+					return nil, err
+				}
+				newMap.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(elem))
+			}
+			return newMap.Interface(), nil
 		}
 	default:
 		return nil, fmt.Errorf("unsupported type: %v", t)
