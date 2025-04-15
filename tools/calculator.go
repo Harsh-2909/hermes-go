@@ -67,6 +67,7 @@ func (c *CalculatorTools) Tools() []Tool {
 }
 
 // Add two numbers and return the result.
+//
 // @param a: The first number to add
 // @param b: The second number to add
 // @return The sum of the two numbers
@@ -75,6 +76,7 @@ func (c *CalculatorTools) Add(ctx context.Context, a, b float64) float64 {
 }
 
 // Subtract two numbers and return the result.
+//
 // @param a: The first number
 // @param b: The second number
 // @return The result of subtracting b from a
@@ -83,6 +85,7 @@ func (c *CalculatorTools) Subtract(ctx context.Context, a, b float64) float64 {
 }
 
 // Multiply two numbers and return the result.
+//
 // @param a: The first number
 // @param b: The second number
 // @return The result of multiplying a by b
@@ -91,6 +94,7 @@ func (c *CalculatorTools) Multiply(ctx context.Context, a, b float64) float64 {
 }
 
 // Divide two numbers and return the result.
+//
 // @param a: The first number
 // @param b: The second number
 // @return The result of dividing a by b. If b is 0, return 0.
@@ -103,6 +107,7 @@ func (c *CalculatorTools) Divide(ctx context.Context, a, b float64) float64 {
 }
 
 // Modulus two numbers and return the result.
+//
 // @param a: The first number
 // @param b: The second number
 // @return The result of modulus a by b. If b is 0, return 0.
