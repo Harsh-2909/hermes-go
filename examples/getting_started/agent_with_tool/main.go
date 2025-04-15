@@ -1,5 +1,3 @@
-//go:build agent_with_tool
-
 package main
 
 import (

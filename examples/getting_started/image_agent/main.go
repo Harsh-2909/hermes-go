@@ -1,5 +1,3 @@
-//go:build image_agent
-
 package main
 
 import (

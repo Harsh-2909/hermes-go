@@ -1,5 +1,3 @@
-//go:build basic_agent
-
 package main
 
 import (
@@ -45,12 +43,13 @@ func main() {
 		Markdown: true,
 	}
 
-	// Non-streaming example
+	// Streaming example
 	ctx := context.Background()
-	response, err := agent.Run(ctx, "What's the latest scoop in NYC?")
+	response, err := agent.RunStream(ctx, "What's the latest scoop in NYC?")
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
-	fmt.Println("Assistant:")
-	fmt.Println(response.Data)
+	for res := range response {
+		fmt.Print(res.Data)
+	}
 }
