@@ -2,17 +2,22 @@ package tools
 
 import (
 	"context"
+	"math"
 
 	"github.com/Harsh-2909/hermes-go/utils"
 )
 
 // CalculatorTools is a toolkit that provides basic arithmetic operations.
 type CalculatorTools struct {
-	EnableAdd      bool // EnableAdd enables the Add tool
-	EnableSubtract bool // EnableSubtract enables the Subtract tool
-	EnableMultiply bool // EnableMultiply enables the Multiply tool
-	EnableDivide   bool // EnableDivide enables the Divide tool
-	EnableModulus  bool // EnableModulus enables the Modulus tool
+	EnableAdd          bool // EnableAdd enables the Add tool
+	EnableSubtract     bool // EnableSubtract enables the Subtract tool
+	EnableMultiply     bool // EnableMultiply enables the Multiply tool
+	EnableDivide       bool // EnableDivide enables the Divide tool
+	EnableModulus      bool // EnableModulus enables the Modulus tool
+	EnableExponentiate bool // EnableExponentiate enables the Exponentiate tool
+	EnableFactorial    bool // EnableFactorial enables the Factorial tool
+	EnableIsPrime      bool // EnableIsPrime enables the IsPrime tool
+	EnableSquareRoot   bool // EnableSquareRoot enables the SquareRoot tool
 
 	// EnableAll enables all tools in the toolkit.
 	EnableAll bool
@@ -61,6 +66,38 @@ func (c *CalculatorTools) Tools() []Tool {
 			tools = append(tools, modulusTool)
 		} else {
 			utils.Logger.Error("Failed to create Modulus tool", "error", err)
+		}
+	}
+	if c.EnableExponentiate || c.EnableAll {
+		expTool, err := CreateToolFromMethod(c, "Exponentiate")
+		if err == nil {
+			tools = append(tools, expTool)
+		} else {
+			utils.Logger.Error("Failed to create Exponentiate tool", "error", err)
+		}
+	}
+	if c.EnableFactorial || c.EnableAll {
+		factTool, err := CreateToolFromMethod(c, "Factorial")
+		if err == nil {
+			tools = append(tools, factTool)
+		} else {
+			utils.Logger.Error("Failed to create Factorial tool", "error", err)
+		}
+	}
+	if c.EnableIsPrime || c.EnableAll {
+		primeTool, err := CreateToolFromMethod(c, "IsPrime")
+		if err == nil {
+			tools = append(tools, primeTool)
+		} else {
+			utils.Logger.Error("Failed to create IsPrime tool", "error", err)
+		}
+	}
+	if c.EnableSquareRoot || c.EnableAll {
+		sqrtTool, err := CreateToolFromMethod(c, "SquareRoot")
+		if err == nil {
+			tools = append(tools, sqrtTool)
+		} else {
+			utils.Logger.Error("Failed to create SquareRoot tool", "error", err)
 		}
 	}
 	return tools
@@ -117,4 +154,53 @@ func (c *CalculatorTools) Modulus(ctx context.Context, a, b int) int {
 		return 0
 	}
 	return a % b
+}
+
+// Exponentiate returns base raised to the power exp.
+// @param base: The base number
+// @param exp: The exponent
+// @return The result of base^exp
+func (c *CalculatorTools) Exponentiate(ctx context.Context, base, exp float64) float64 {
+	return math.Pow(base, exp)
+}
+
+// Factorial returns the factorial of n.
+// @param n: The number to compute factorial for
+// @return The factorial of n. For n < 0, returns 0.
+func (c *CalculatorTools) Factorial(ctx context.Context, n int) int {
+	if n < 0 {
+		utils.Logger.Error("Factorial of negative number", "n", n)
+		return 0
+	}
+	result := 1
+	for i := 2; i <= n; i++ {
+		result *= i
+	}
+	return result
+}
+
+// IsPrime determines if n is a prime number.
+// @param n: The number to check
+// @return True if n is prime, otherwise false.
+func (c *CalculatorTools) IsPrime(ctx context.Context, n int) bool {
+	if n <= 1 {
+		return false
+	}
+	for i := 2; i*i <= n; i++ {
+		if n%i == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// SquareRoot returns the square root of x.
+// @param x: The number to find the square root of
+// @return The square root of x. If x is negative, returns 0.
+func (c *CalculatorTools) SquareRoot(ctx context.Context, x float64) float64 {
+	if x < 0 {
+		utils.Logger.Error("Square root of negative number", "x", x)
+		return 0
+	}
+	return math.Sqrt(x)
 }

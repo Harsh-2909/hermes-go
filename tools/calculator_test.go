@@ -135,3 +135,77 @@ func TestCalculatorTools_Tools_Modulus(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculatorTools_Tools_Exponentiate(t *testing.T) {
+	calcTools := &CalculatorTools{EnableExponentiate: true}
+	tools := calcTools.Tools()
+	assert.Equal(t, 1, len(tools))
+	tool := tools[0]
+	ctx := context.Background()
+
+	val, err := tool.Execute(ctx, `{"base": 2, "exp": 3}`)
+	assert.Nil(t, err)
+	expected := 8.0
+	res, _ := strconv.ParseFloat(val, 64)
+	assert.Equal(t, expected, calcTools.Exponentiate(ctx, 2, 3))
+	assert.Equal(t, fmt.Sprintf("%.2f", expected), fmt.Sprintf("%.2f", res))
+}
+
+func TestCalculatorTools_Tools_Factorial(t *testing.T) {
+	calcTools := &CalculatorTools{EnableFactorial: true}
+	tools := calcTools.Tools()
+	assert.Equal(t, 1, len(tools))
+	tool := tools[0]
+	ctx := context.Background()
+
+	val, err := tool.Execute(ctx, `{"n": 5}`)
+	assert.Nil(t, err)
+	expected := 120
+	res, _ := strconv.Atoi(val)
+	assert.Equal(t, expected, calcTools.Factorial(ctx, 5))
+	assert.Equal(t, 1, calcTools.Factorial(ctx, 0))
+	assert.Equal(t, 0, calcTools.Factorial(ctx, -1))
+	assert.Equal(t, expected, res)
+}
+
+func TestCalculatorTools_Tools_IsPrime(t *testing.T) {
+	calcTools := &CalculatorTools{EnableIsPrime: true}
+	tools := calcTools.Tools()
+	assert.Equal(t, 1, len(tools))
+	tool := tools[0]
+	ctx := context.Background()
+
+	valPrime, errPrime := tool.Execute(ctx, `{"n": 7}`)
+	assert.Nil(t, errPrime)
+	assert.Equal(t, true, calcTools.IsPrime(ctx, 7))
+	assert.Equal(t, "true", valPrime)
+
+	valNonPrime, errNonPrime := tool.Execute(ctx, `{"n": 8}`)
+	assert.Nil(t, errNonPrime)
+	assert.Equal(t, false, calcTools.IsPrime(ctx, 8))
+	assert.Equal(t, false, calcTools.IsPrime(ctx, -1))
+	assert.Equal(t, "false", valNonPrime)
+}
+
+func TestCalculatorTools_Tools_SquareRoot(t *testing.T) {
+	calcTools := &CalculatorTools{EnableSquareRoot: true}
+	tools := calcTools.Tools()
+	assert.Equal(t, 1, len(tools))
+	tool := tools[0]
+	ctx := context.Background()
+
+	val, err := tool.Execute(ctx, `{"x": 9}`)
+	assert.Nil(t, err)
+	expected := 3.0
+	res, _ := strconv.ParseFloat(val, 64)
+	assert.Equal(t, expected, calcTools.SquareRoot(ctx, 9))
+	assert.Equal(t, fmt.Sprintf("%.2f", expected), fmt.Sprintf("%.2f", res))
+
+	// Test negative input
+	_, errNeg := tool.Execute(ctx, `{"x": -4}`)
+	assert.Nil(t, errNeg)
+	sqrtNeg := calcTools.SquareRoot(ctx, -4)
+	assert.Equal(t, 0.0, sqrtNeg)
+	// Format the negative case result for consistency, expecting "0.00"
+	assert.Equal(t, "0.00", fmt.Sprintf("%.2f", sqrtNeg))
+}
