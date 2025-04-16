@@ -14,7 +14,7 @@ func TestCalculatorTools_Tools(t *testing.T) {
 		EnableAll: true,
 	}
 	tools := calcTools.Tools()
-	assert.Equal(t, 5, len(tools))
+	assert.Equal(t, 9, len(tools))
 	assert.NotNil(t, tools)
 }
 
@@ -143,12 +143,23 @@ func TestCalculatorTools_Tools_Exponentiate(t *testing.T) {
 	tool := tools[0]
 	ctx := context.Background()
 
-	val, err := tool.Execute(ctx, `{"base": 2, "exp": 3}`)
-	assert.Nil(t, err)
-	expected := 8.0
-	res, _ := strconv.ParseFloat(val, 64)
-	assert.Equal(t, expected, calcTools.Exponentiate(ctx, 2, 3))
-	assert.Equal(t, fmt.Sprintf("%.2f", expected), fmt.Sprintf("%.2f", res))
+	tests := []struct {
+		name                string
+		base, exp, expected float64
+	}{
+		{"2^3", 2, 3, 8.0},
+		{"3^2", 3, 2, 9.0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := fmt.Sprintf(`{"base": %f, "exp": %f}`, tt.base, tt.exp)
+			val, err := tool.Execute(ctx, query)
+			assert.Nil(t, err)
+			res, _ := strconv.ParseFloat(val, 64)
+			assert.Equal(t, tt.expected, calcTools.Exponentiate(ctx, tt.base, tt.exp))
+			assert.Equal(t, fmt.Sprintf("%.2f", tt.expected), fmt.Sprintf("%.2f", res))
+		})
+	}
 }
 
 func TestCalculatorTools_Tools_Factorial(t *testing.T) {
@@ -158,14 +169,24 @@ func TestCalculatorTools_Tools_Factorial(t *testing.T) {
 	tool := tools[0]
 	ctx := context.Background()
 
-	val, err := tool.Execute(ctx, `{"n": 5}`)
-	assert.Nil(t, err)
-	expected := 120
-	res, _ := strconv.Atoi(val)
-	assert.Equal(t, expected, calcTools.Factorial(ctx, 5))
-	assert.Equal(t, 1, calcTools.Factorial(ctx, 0))
-	assert.Equal(t, 0, calcTools.Factorial(ctx, -1))
-	assert.Equal(t, expected, res)
+	tests := []struct {
+		name        string
+		n, expected int
+	}{
+		{"Factorial of 5", 5, 120},
+		{"Factorial of 0", 0, 1},
+		{"Factorial of negative", -1, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := fmt.Sprintf(`{"n": %d}`, tt.n)
+			val, err := tool.Execute(ctx, query)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.expected, calcTools.Factorial(ctx, tt.n))
+			res, _ := strconv.Atoi(val)
+			assert.Equal(t, tt.expected, res)
+		})
+	}
 }
 
 func TestCalculatorTools_Tools_IsPrime(t *testing.T) {
@@ -175,16 +196,25 @@ func TestCalculatorTools_Tools_IsPrime(t *testing.T) {
 	tool := tools[0]
 	ctx := context.Background()
 
-	valPrime, errPrime := tool.Execute(ctx, `{"n": 7}`)
-	assert.Nil(t, errPrime)
-	assert.Equal(t, true, calcTools.IsPrime(ctx, 7))
-	assert.Equal(t, "true", valPrime)
-
-	valNonPrime, errNonPrime := tool.Execute(ctx, `{"n": 8}`)
-	assert.Nil(t, errNonPrime)
-	assert.Equal(t, false, calcTools.IsPrime(ctx, 8))
-	assert.Equal(t, false, calcTools.IsPrime(ctx, -1))
-	assert.Equal(t, "false", valNonPrime)
+	tests := []struct {
+		name        string
+		n           int
+		expected    bool
+		expectedStr string
+	}{
+		{"Prime number", 7, true, "true"},
+		{"Non-prime positive", 8, false, "false"},
+		{"Negative number", -1, false, "false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := fmt.Sprintf(`{"n": %d}`, tt.n)
+			val, err := tool.Execute(ctx, query)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.expected, calcTools.IsPrime(ctx, tt.n))
+			assert.Equal(t, tt.expectedStr, val)
+		})
+	}
 }
 
 func TestCalculatorTools_Tools_SquareRoot(t *testing.T) {
@@ -194,18 +224,22 @@ func TestCalculatorTools_Tools_SquareRoot(t *testing.T) {
 	tool := tools[0]
 	ctx := context.Background()
 
-	val, err := tool.Execute(ctx, `{"x": 9}`)
-	assert.Nil(t, err)
-	expected := 3.0
-	res, _ := strconv.ParseFloat(val, 64)
-	assert.Equal(t, expected, calcTools.SquareRoot(ctx, 9))
-	assert.Equal(t, fmt.Sprintf("%.2f", expected), fmt.Sprintf("%.2f", res))
-
-	// Test negative input
-	_, errNeg := tool.Execute(ctx, `{"x": -4}`)
-	assert.Nil(t, errNeg)
-	sqrtNeg := calcTools.SquareRoot(ctx, -4)
-	assert.Equal(t, 0.0, sqrtNeg)
-	// Format the negative case result for consistency, expecting "0.00"
-	assert.Equal(t, "0.00", fmt.Sprintf("%.2f", sqrtNeg))
+	tests := []struct {
+		name        string
+		x, expected float64
+	}{
+		{"Square root of positive", 9, 3.0},
+		{"Square root of zero", 0, 0.0},
+		{"Square root of negative", -4, 0.0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := fmt.Sprintf(`{"x": %f}`, tt.x)
+			val, err := tool.Execute(ctx, query)
+			assert.Nil(t, err)
+			res, _ := strconv.ParseFloat(val, 64)
+			assert.Equal(t, tt.expected, calcTools.SquareRoot(ctx, tt.x))
+			assert.Equal(t, fmt.Sprintf("%.2f", tt.expected), fmt.Sprintf("%.2f", res))
+		})
+	}
 }
