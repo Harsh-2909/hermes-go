@@ -2,9 +2,12 @@
 
 Describe key changes, mention related issues or motivation for the changes.
 
+## Related Issues
+- #____ (issue number)
+
 ## Type of change
 
-- [ ] Bug fix (If applicable, issue number: #____)
+- [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Improvement

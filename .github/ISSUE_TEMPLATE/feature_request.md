@@ -27,6 +27,6 @@ Include any extra information that might be helpful, such as:
 
 ## Would you like to work on this?
 We welcome contributions! Let us know if you’d like to help implement this feature.
-**[ ] Yes, I’d love to work on it!**
-**[ ] I’m open to collaborating but need guidance.**
-**[ ] No, I’m just sharing the idea.**
+- [ ] Yes, I’d love to work on it!
+- [ ] I’m open to collaborating but need guidance.
+- [ ] No, I’m just sharing the idea.
