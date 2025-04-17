@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 // Claude implements the Model interface for Anthropic's Claude API.
 type Claude struct {
-	ApiKey      string  // Required Anthropic API key
+	ApiKey      string  // Required Anthropic API key. If not provided, it will be fetched from the environment variable `ANTHROPIC_API_KEY`.
 	Id          string  // Required model ID (e.g., "claude-3-sonnet-20240229")
 	Temperature float32 // In [0,1] range. Higher values -> more creative
 	TopP        float32 // Nucleus sampling parameter, in [0,1] range
@@ -36,6 +37,7 @@ func (model *Claude) Init() {
 	if model.isInit {
 		return
 	}
+	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("ANTHROPIC_API_KEY"))
 	if model.ApiKey == "" {
 		panic("Claude must have an API key")
 	}

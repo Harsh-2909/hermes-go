@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
@@ -15,7 +16,7 @@ import (
 
 // OpenAIChat implements the Model interface for OpenAI's Chat API.
 type OpenAIChat struct {
-	ApiKey           string  // Required OpenAI API key.
+	ApiKey           string  // Required OpenAI API key. If not provided, it will be fetched from the environment variable `OPENAI_API_KEY`.
 	Id               string  // Required model ID (e.g., "gpt-4o-mini")
 	Temperature      float32 // In [0,2] range. Higher values -> more creative.
 	PresencePenalty  float32 // In [-2,2] range.
@@ -52,6 +53,7 @@ func (model *OpenAIChat) Init() {
 	if model.isInit {
 		return
 	}
+	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("OPENAI_API_KEY"))
 	if model.ApiKey == "" {
 		panic("OpenAIChat must have an API key")
 	}
