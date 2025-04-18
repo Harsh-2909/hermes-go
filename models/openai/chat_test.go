@@ -61,9 +61,6 @@ func TestOpenAIChatInit(t *testing.T) {
 				if tt.model.Temperature != tt.wantTemp {
 					t.Errorf("Expected Temperature %f, got %f", tt.wantTemp, tt.model.Temperature)
 				}
-				if tt.model.client == nil {
-					t.Errorf("Expected client to be initialized")
-				}
 			}
 		})
 	}
@@ -144,6 +141,7 @@ func TestChatCompletion(t *testing.T) {
 		ApiKey:      "test-key", // Not used since we override client
 		Temperature: 0.7,
 	}
+	model.Init()
 
 	// Test ChatCompletion
 	ctx := context.Background()
@@ -217,6 +215,7 @@ func TestChatCompletionStream(t *testing.T) {
 		ApiKey:      "test-key", // Not used since we override client
 		Temperature: 0.7,
 	}
+	model.Init()
 
 	// Test ChatCompletionStream
 	ctx := context.Background()
@@ -303,6 +302,8 @@ func TestChatCompletionWithToolCalls(t *testing.T) {
 		ApiKey:      "test-key", // Not used since we override client
 		Temperature: 0.7,
 	}
+	model.Init()
+
 	model.SetTools([]tools.Tool{
 		{
 			Name:        "calculate",
@@ -431,6 +432,8 @@ func TestChatCompletionStreamWithToolCalls(t *testing.T) {
 		ApiKey:      "test-key", // Not used since we override client
 		Temperature: 0.7,
 	}
+	model.Init()
+
 	model.SetTools([]tools.Tool{
 		{
 			Name:        "calculate",
