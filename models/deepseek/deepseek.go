@@ -6,19 +6,20 @@ import (
 	"os"
 
 	"github.com/Harsh-2909/hermes-go/models"
+	openaiModel "github.com/Harsh-2909/hermes-go/models/openai"
 	"github.com/Harsh-2909/hermes-go/tools"
 	"github.com/Harsh-2909/hermes-go/utils"
 	"github.com/sashabaranov/go-openai"
 )
 
-const OpenAIBaseURL = "https://api.openai.com/v1"
+const DeepSeekBaseURL = "https://api.deepseek.com"
 
-// OpenAIChat provides a struct for interacting with OpenAI models using the Chat completions API.
+// DeepSeek provides a struct for interacting with DeepSeek models.
 //
-// For more information, see: https://platform.openai.com/docs/api-reference/chat/create
-type OpenAIChat struct {
-	ApiKey           string  // Required OpenAI API key. If not provided, it will be fetched from the environment variable `OPENAI_API_KEY`.
-	Id               string  // Required model ID (e.g., "gpt-4o-mini")
+// For more information, see: https://api-docs.deepseek.com/
+type DeepSeek struct {
+	ApiKey           string  // Required OpenAI API key. If not provided, it will be fetched from the environment variable `DEEPSEEK_API_KEY`.
+	Id               string  // Required model ID (e.g., "deepseek-chat")
 	Temperature      float32 // In [0,2] range. Higher values -> more creative.
 	PresencePenalty  float32 // In [-2,2] range.
 	FrequencyPenalty float32 // In [-2,2] range.
@@ -46,23 +47,23 @@ type OpenAIChat struct {
 	client *openai.Client // Internal OpenAI API client
 	isInit bool           // Internal flag to track initialization
 
-	baseChatModel BaseChat
+	baseChatModel openaiModel.BaseChat
 }
 
-// Init initializes the OpenAIChat instance with defaults and validates required fields.
+// Init initializes the DeepSeek instance with defaults and validates required fields.
 // It panics if ApiKey or Id is missing.
-func (model *OpenAIChat) Init() {
+func (model *DeepSeek) Init() {
 	if model.isInit {
 		return
 	}
-	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("OPENAI_API_KEY"))
+	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("DEEPSEEK_API_KEY"))
 	if model.ApiKey == "" {
-		utils.Logger.Error("OpenAIChat must have an API key")
-		panic("OpenAIChat must have an API key")
+		utils.Logger.Error("DeepSeek must have an API key")
+		panic("DeepSeek must have an API key")
 	}
 	if model.Id == "" {
-		utils.Logger.Error("OpenAIChat must have a model ID")
-		panic("OpenAIChat must have a model ID")
+		utils.Logger.Error("DeepSeek must have a model ID")
+		panic("DeepSeek must have a model ID")
 	}
 	if model.Temperature < 0 || model.Temperature > 2 {
 		model.Temperature = 0.5
@@ -86,7 +87,8 @@ func (model *OpenAIChat) Init() {
 		model.N = 1
 	}
 
-	model.baseChatModel = BaseChat{
+	model.baseChatModel = openaiModel.BaseChat{
+		BaseURL:             DeepSeekBaseURL,
 		ApiKey:              model.ApiKey,
 		Id:                  model.Id,
 		Temperature:         model.Temperature,
@@ -106,19 +108,19 @@ func (model *OpenAIChat) Init() {
 	model.isInit = true
 }
 
-func (model *OpenAIChat) SetTools(tools []tools.Tool) {
+func (model *DeepSeek) SetTools(tools []tools.Tool) {
 	model.baseChatModel.SetTools(tools)
 }
 
 // ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
 // It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
-func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
+func (model *DeepSeek) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	return model.baseChatModel.ChatCompletion(ctx, messages)
 }
 
 // ChatCompletionStream initiates a streaming chat request to OpenAI and returns a channel of responses.
 // It emits ModelResponse events ("chunk" for content, "end" for completion, "error" for failures).
 // The caller must consume the channel to process the stream.
-func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
+func (model *DeepSeek) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
 	return model.baseChatModel.ChatCompletionStream(ctx, messages)
 }

@@ -39,12 +39,12 @@ type BaseChat struct {
 	// token position, each with an associated log probability.
 	// logprobs must be set to true if this parameter is used.
 	TopLogProbs int
+	Client      *openai.Client // OpenAI API client
 
 	// Internal fields
 
-	client *openai.Client // Internal OpenAI API client
-	isInit bool           // Internal flag to track initialization
-	tools  []tools.Tool   // Internal list of tools
+	isInit bool         // Internal flag to track initialization
+	tools  []tools.Tool // Internal list of tools
 }
 
 // Init initializes the OpenAIChat instance with defaults and validates required fields.
@@ -75,12 +75,12 @@ func (model *BaseChat) Init() {
 		model.N = 1
 	}
 
-	if model.client == nil {
+	if model.Client == nil {
 		config := openai.DefaultConfig(model.ApiKey)
 		if model.BaseURL != "" {
 			config.BaseURL = model.BaseURL
 		}
-		model.client = openai.NewClientWithConfig(config)
+		model.Client = openai.NewClientWithConfig(config)
 	}
 	model.isInit = true
 }
@@ -216,7 +216,7 @@ func (model *BaseChat) ChatCompletion(ctx context.Context, messages []models.Mes
 		return models.ModelResponse{}, fmt.Errorf("failed to convert messages: %w", err)
 	}
 
-	resp, err := model.client.CreateChatCompletion(ctx, model.getChatCompletionRequest(openaiMessages, false))
+	resp, err := model.Client.CreateChatCompletion(ctx, model.getChatCompletionRequest(openaiMessages, false))
 	if err != nil {
 		utils.Logger.Error("Failed to get chat completion", "model", model.Id, "error", err)
 		return models.ModelResponse{}, fmt.Errorf("failed to get chat completion for model %s: %w", model.Id, err)
@@ -263,7 +263,7 @@ func (model *BaseChat) ChatCompletionStream(ctx context.Context, messages []mode
 		return nil, fmt.Errorf("failed to convert messages: %w", err)
 	}
 
-	stream, err := model.client.CreateChatCompletionStream(ctx, model.getChatCompletionRequest(openaiMessages, true))
+	stream, err := model.Client.CreateChatCompletionStream(ctx, model.getChatCompletionRequest(openaiMessages, true))
 	if err != nil {
 		utils.Logger.Error("Failed to create stream", "error", err)
 		return nil, fmt.Errorf("failed to create stream: %w", err)

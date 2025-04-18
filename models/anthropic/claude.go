@@ -17,7 +17,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// Claude implements the Model interface for Anthropic's Claude API.
+// Claude provides a struct for interacting with Anthropic Claude models.
+//
+// For more information, see: https://docs.anthropic.com/en/api/messages
 type Claude struct {
 	ApiKey      string  // Required Anthropic API key. If not provided, it will be fetched from the environment variable `ANTHROPIC_API_KEY`.
 	Id          string  // Required model ID (e.g., "claude-3-sonnet-20240229")
@@ -39,9 +41,11 @@ func (model *Claude) Init() {
 	}
 	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("ANTHROPIC_API_KEY"))
 	if model.ApiKey == "" {
+		utils.Logger.Error("Claude must have an API key")
 		panic("Claude must have an API key")
 	}
 	if model.Id == "" {
+		utils.Logger.Error("Claude must have a model ID")
 		panic("Claude must have a model ID")
 	}
 	if model.Temperature < 0 || model.Temperature > 1 {
