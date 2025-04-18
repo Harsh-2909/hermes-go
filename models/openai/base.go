@@ -1,11 +1,9 @@
-// Package models provides implementations of the Model interface, including OpenAI integration.
 package models
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/Harsh-2909/hermes-go/models"
@@ -14,8 +12,10 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-// OpenAIChat implements the Model interface for OpenAI's Chat API.
-type OpenAIChat struct {
+// BaseChat is a struct that implements the Model interface for OpenAI's Chat completions API.
+// Any Model that uses the same interface as OpenAI Chat must use BaseChat using composition pattern to avoid code duplication.
+type BaseChat struct {
+	BaseURL          string  // Base URL for accessing Models. Change it based on different providers.
 	ApiKey           string  // Required OpenAI API key. If not provided, it will be fetched from the environment variable `OPENAI_API_KEY`.
 	Id               string  // Required model ID (e.g., "gpt-4o-mini")
 	Temperature      float32 // In [0,2] range. Higher values -> more creative.
@@ -49,16 +49,9 @@ type OpenAIChat struct {
 
 // Init initializes the OpenAIChat instance with defaults and validates required fields.
 // It panics if ApiKey or Id is missing.
-func (model *OpenAIChat) Init() {
+func (model *BaseChat) Init() {
 	if model.isInit {
 		return
-	}
-	model.ApiKey = utils.FirstNonEmpty(model.ApiKey, os.Getenv("OPENAI_API_KEY"))
-	if model.ApiKey == "" {
-		panic("OpenAIChat must have an API key")
-	}
-	if model.Id == "" {
-		panic("OpenAIChat must have a model ID")
 	}
 	if model.Temperature < 0 || model.Temperature > 2 {
 		model.Temperature = 0.5
@@ -82,11 +75,18 @@ func (model *OpenAIChat) Init() {
 		model.N = 1
 	}
 
-	model.client = openai.NewClient(model.ApiKey)
+	if model.client == nil {
+		config := openai.DefaultConfig(model.ApiKey)
+		if model.BaseURL != "" {
+			config.BaseURL = model.BaseURL
+		}
+		model.client = openai.NewClientWithConfig(config)
+	}
 	model.isInit = true
 }
 
-func (model *OpenAIChat) SetTools(tools []tools.Tool) {
+// SetTools sets the tools for the model.
+func (model *BaseChat) SetTools(tools []tools.Tool) {
 	model.tools = tools
 }
 
@@ -175,7 +175,7 @@ func convertMessageToOpenAIFormat(messages []models.Message) ([]openai.ChatCompl
 }
 
 // getChatCompletionRequest constructs an OpenAI ChatCompletionRequest from the model's settings and input messages.
-func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompletionMessage, stream bool) openai.ChatCompletionRequest {
+func (model *BaseChat) getChatCompletionRequest(messages []openai.ChatCompletionMessage, stream bool) openai.ChatCompletionRequest {
 	// Convert tools to OpenAI format
 	var openaiTools []openai.Tool
 	for _, tool := range model.tools {
@@ -209,7 +209,7 @@ func (model *OpenAIChat) getChatCompletionRequest(messages []openai.ChatCompleti
 
 // ChatCompletion sends a synchronous chat request to OpenAI and returns the response.
 // It converts input messages to OpenAI's format, makes the API call, and constructs a ModelResponse with usage data.
-func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
+func (model *BaseChat) ChatCompletion(ctx context.Context, messages []models.Message) (models.ModelResponse, error) {
 	openaiMessages, err := convertMessageToOpenAIFormat(messages)
 	if err != nil {
 		utils.Logger.Error("Failed to convert messages", "error", err)
@@ -256,7 +256,7 @@ func (model *OpenAIChat) ChatCompletion(ctx context.Context, messages []models.M
 // ChatCompletionStream initiates a streaming chat request to OpenAI and returns a channel of responses.
 // It emits ModelResponse events ("chunk" for content, "end" for completion, "error" for failures).
 // The caller must consume the channel to process the stream.
-func (model *OpenAIChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
+func (model *BaseChat) ChatCompletionStream(ctx context.Context, messages []models.Message) (chan models.ModelResponse, error) {
 	openaiMessages, err := convertMessageToOpenAIFormat(messages)
 	if err != nil {
 		utils.Logger.Error("Failed to convert messages", "error", err)
