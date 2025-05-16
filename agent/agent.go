@@ -381,6 +381,7 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 	if err != nil {
 		termWidth = 100 // Fallback to default width
 	}
+	pterm.SetForcedTerminalSize(termWidth-4, 0)
 
 	// Store the original slog handler and set the custom handler.
 	// We are doing this to capture the logs in logBuffer and print them with the response.
@@ -432,8 +433,8 @@ func (agent *Agent) PrintResponse(ctx context.Context, userMessage string, strea
 		if err != nil {
 			tp.errorMessage = err.Error()
 		}
-		spinner.Stop()
 		for resp := range ch {
+			spinner.Stop()
 			switch resp.Event {
 			case "chunk":
 				tp.response += resp.Data
